@@ -10,7 +10,7 @@ import {
   type PieceType,
   type Side,
 } from '../engine'
-import { chooseAction, DIFFICULTIES, type Difficulty } from './bot'
+import { chooseAction, DIFFICULTIES, evaluateV2, type Difficulty } from './bot'
 
 type Spec = [Side, PieceType, number, number]
 
@@ -102,4 +102,31 @@ describe('规则 AI', () => {
     const s = position([['red', 'R', 0, 9]], 'black')
     expect(chooseAction(s, 'red', { difficulty: 'normal' })).toBeNull()
   })
+
+  describe('第二版评估', () => {
+    it('出动的车比困在底线的车分高', () => {
+      const home = position([['red', 'R', 0, 9]])
+      const out = position([['red', 'R', 0, 5]])
+      expect(evaluateV2(out, 'red')).toBeGreaterThan(evaluateV2(home, 'red'))
+    })
+
+    it('被攻击又没保护的子扣分，有保护时扣得少', () => {
+      // 黑车攻击 (4,5) 的红马；第二个局面里红炮在 (4,7) 隔着兵保护它
+      const loose = position([
+        ['red', 'N', 4, 5],
+        ['black', 'R', 4, 2],
+        ['red', 'P', 0, 6],
+      ], 'black')
+      const guarded = position([
+        ['red', 'N', 4, 5],
+        ['black', 'R', 4, 2],
+        ['red', 'R', 0, 5],
+      ], 'black')
+      // 去掉保护者自身的价值差异：比较"马被扣的分"
+      const lossLoose = evaluateV2(position([['red', 'N', 4, 5], ['red', 'P', 0, 6]], 'black'), 'red') - evaluateV2(loose, 'red')
+      const lossGuarded = evaluateV2(position([['red', 'N', 4, 5], ['red', 'R', 0, 5]], 'black'), 'red') - evaluateV2(guarded, 'red')
+      expect(lossLoose).toBeGreaterThan(lossGuarded)
+    })
+  })
 })
+

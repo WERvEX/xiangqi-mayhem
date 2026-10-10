@@ -28,22 +28,29 @@ const HORSE = [
  * 生成某一方的全部走法（已应用锦囊修改）。
  * 采用"吃将获胜"规则，所以不过滤送将的走法。
  */
-export function generateMoves(state: GameState, side: Side, mods: RuleMods): Move[] {
+export function generateMoves(state: GameState, side: Side, mods: RuleMods, defends?: Set<string>): Move[] {
   const grid = buildGrid(state.pieces)
   const out: Move[] = []
   for (const p of state.pieces) {
-    if (p.alive && p.side === side) genPiece(p, grid, mods, out)
+    if (p.alive && p.side === side) genPiece(p, grid, mods, out, defends)
   }
   return out
 }
 
-function genPiece(p: Piece, grid: Grid, mods: RuleMods, out: Move[]) {
+/**
+ * defends：可选，收集"如果这里是敌子就能吃到"的己方棋子 id，即受到保护的己方棋子。
+ * 只有 AI 评估时需要。
+ */
+function genPiece(p: Piece, grid: Grid, mods: RuleMods, out: Move[], defends?: Set<string>) {
   const side = p.side
   /** 能落子返回 true（空位或敌子） */
   const push = (x: number, y: number): boolean => {
     if (!inBounds(x, y)) return false
     const t = grid[y][x]
-    if (t && t.side === side) return false
+    if (t && t.side === side) {
+      defends?.add(t.id)
+      return false
+    }
     out.push({ pieceId: p.id, from: { x: p.x, y: p.y }, to: { x, y }, captureId: t?.id })
     return true
   }
@@ -60,6 +67,7 @@ function genPiece(p: Piece, grid: Grid, mods: RuleMods, out: Move[]) {
         if (!inBounds(nx, ny) || !kingOk(nx, ny)) continue
         const t = grid[ny][nx]
         if (t && t.side === side) {
+          defends?.add(t.id)
           // 移形换影：与相邻的己方棋子换位（只限上下左右）
           if (mods.kingSwap && (dx === 0 || dy === 0)) {
             out.push({ pieceId: p.id, from: { x: p.x, y: p.y }, to: { x: nx, y: ny }, swapId: t.id })

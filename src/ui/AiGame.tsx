@@ -146,6 +146,11 @@ function AiMatch({
     }
   }, [state, aiSide, difficulty, personality, dispatch])
 
+  // 开发模式下暴露给控制台，便于调试和测试（生产构建会移除）
+  useEffect(() => {
+    if (import.meta.env.DEV) Object.assign(window, { __xq: { state, dispatch } })
+  })
+
   const aiName = `AI·${DIFFICULTIES[settings.difficulty].name}·${PERSONALITIES[settings.personality].name}`
   const labels = { [humanSide]: '（你）', [aiSide]: `（${aiName}）` }
 

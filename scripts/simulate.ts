@@ -5,6 +5,8 @@
  *   npm run sim -- --games 200 --no-augments     # 对照组：纯象棋（吃将获胜）
  *   npm run sim -- --threads 2                   # 并发线程数，默认 3
  *   npm run sim -- --comeback                    # 开启逆风补偿（默认关闭，以便单独衡量锦囊强度）
+ *   npm run sim -- --compare --time 150          # AI 新旧评估函数对战：相同思考时间，双方轮流执红
+ *   npm run sim -- --compare --depth 3           # 同上，但固定搜索深度（只比较评估函数本身）
  *
  * 默认只用少量线程并以最低优先级运行，避免占满 CPU 影响电脑正常使用。
  *
@@ -12,11 +14,13 @@
  */
 import { availableParallelism, constants, setPriority } from 'node:os'
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads'
-import { chooseAction } from '../src/ai/bot'
+import { chooseAction, type BotOptions } from '../src/ai/bot'
 import { AUGMENTS, CONFIG, createGame, applyAction, roundOf, type GameState, type Side } from '../src/engine'
 
 interface GameResult {
   winner: Side | null
+  /** 对比模式下，新版评估执哪一方 */
+  v2Side?: Side
   rounds: number
   reason: string
   augments: Record<Side, string[]>
@@ -26,7 +30,12 @@ interface GameResult {
   firstCaptureRound: number | null
 }
 
-function playGame(seed: string, depth: number, noAugments: boolean): GameResult {
+interface Compare {
+  timeMs: number
+  v2Side: Side
+}
+
+function playGame(seed: string, depth: number, noAugments: boolean, compare?: Compare): GameResult {
   let rngState = [...seed].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) >>> 0
   const rng = () => {
     rngState = (rngState * 1664525 + 1013904223) >>> 0
@@ -57,7 +66,17 @@ function playGame(seed: string, depth: number, noAugments: boolean): GameResult 
       continue
     }
     const before = s.pieces.filter((p) => p.alive).length
-    s = applyAction(s, chooseAction(s, s.turn, { depth, rng })!)
+    const opts: BotOptions = compare
+      ? {
+          timeMs: compare.timeMs,
+          depth: compare.timeMs === Infinity ? depth : 12,
+          quiescence: true,
+          noise: 0.1,
+          rng,
+          evalVersion: s.turn === compare.v2Side ? 2 : 1,
+        }
+      : { depth, rng }
+    s = applyAction(s, chooseAction(s, s.turn, opts)!)
     if (firstCaptureRound === null && s.pieces.filter((p) => p.alive).length < before) firstCaptureRound = roundOf(s)
   }
   return {
@@ -67,19 +86,28 @@ function playGame(seed: string, depth: number, noAugments: boolean): GameResult 
     augments: { red: s.augments.red.map((a) => a.id), black: s.augments.black.map((a) => a.id) },
     draftRounds,
     firstCaptureRound,
+    v2Side: compare?.v2Side,
   }
 }
 
 if (!isMainThread) {
-  const { seeds, depth, noAugments, comeback } = workerData as {
+  const { seeds, depth, noAugments, comeback, compareTime } = workerData as {
     seeds: string[]
     depth: number
     noAugments: boolean
     comeback: boolean
+    compareTime: number | null
   }
   // 默认关闭逆风补偿：否则落后方更容易拿到高品质锦囊，会把高品质锦囊的胜率拉低
   if (!comeback) CONFIG.comebackThreshold = Infinity
-  for (const seed of seeds) parentPort!.postMessage(playGame(seed, depth, noAugments))
+  for (const seed of seeds) {
+    // 对比模式：按种子序号轮流让新版执红、执黑，抵消先手优势
+    const compare =
+      compareTime === null
+        ? undefined
+        : { timeMs: compareTime, v2Side: (Number(seed.split('-').pop()) % 2 === 0 ? 'red' : 'black') as Side }
+    parentPort!.postMessage(playGame(seed, depth, noAugments, compare))
+  }
 } else {
   const args = process.argv.slice(2)
   const arg = (name: string, def: number) => {
@@ -90,6 +118,8 @@ if (!isMainThread) {
   const depth = arg('depth', 2)
   const noAugments = args.includes('--no-augments')
   const comeback = args.includes('--comeback')
+  // 对比模式：给了 --depth 就固定深度、不限时间；否则按 --time 限时
+  const compareTime = args.includes('--compare') ? (args.includes('--depth') ? Infinity : arg('time', 150)) : null
   const tag = args.includes('--tag') ? args[args.indexOf('--tag') + 1] : 'sim'
   const threads = Math.max(1, Math.min(arg('threads', 3), availableParallelism() - 1, games))
   try {
@@ -107,7 +137,7 @@ if (!isMainThread) {
       const chunk = seeds.filter((_, i) => i % threads === t)
       return new Promise<void>((resolve, reject) => {
         const w = new Worker(new URL(import.meta.url), {
-          workerData: { seeds: chunk, depth, noAugments, comeback },
+          workerData: { seeds: chunk, depth, noAugments, comeback, compareTime },
           execArgv: ['--import', 'tsx'],
         })
         w.on('message', (r: GameResult) => {
@@ -119,7 +149,8 @@ if (!isMainThread) {
       })
     }),
   )
-  report(results, games, depth, noAugments, (Date.now() - start) / 1000)
+  if (compareTime !== null) reportCompare(results, compareTime, (Date.now() - start) / 1000)
+  else report(results, games, depth, noAugments, (Date.now() - start) / 1000)
 }
 
 function report(results: GameResult[], games: number, depth: number, noAugments: boolean, secs: number) {
@@ -167,4 +198,32 @@ function report(results: GameResult[], games: number, depth: number, noAugments:
       `${def.tier.padEnd(6)} ${def.name.padEnd(8, '　')} ${(row.rate * 100).toFixed(1).padStart(5)}% ±${(ci * 100).toFixed(0).padStart(2)}  (n=${row.n})`,
     )
   }
+}
+
+function reportCompare(results: GameResult[], timeMs: number, secs: number) {
+  const n = results.length
+  let score = 0
+  let wins = 0
+  let losses = 0
+  for (const r of results) {
+    if (r.winner === null) score += 0.5
+    else if (r.winner === r.v2Side) {
+      score += 1
+      wins++
+    } else losses++
+  }
+  const rate = score / n
+  const ci = 1.96 * Math.sqrt((rate * (1 - rate)) / n)
+  const rounds = results.map((r) => r.rounds).sort((a, b) => a - b)
+  const budget = timeMs === Infinity ? '固定深度' : `每步 ${timeMs}ms`
+  console.log(`
+=== 新版评估 vs 旧版评估：${n} 局，${budget}，用时 ${secs.toFixed(0)}s ===`)
+  console.log(`新版 胜 ${wins}  负 ${losses}  和 ${n - wins - losses}`)
+  console.log(`新版得分率 ${(rate * 100).toFixed(1)}% ±${(ci * 100).toFixed(1)}%（和棋算半分）`)
+  const asRed = results.filter((r) => r.v2Side === 'red')
+  const asBlack = results.filter((r) => r.v2Side === 'black')
+  const sr = (rs: GameResult[]) =>
+    rs.length ? ((rs.reduce((a, r) => a + (r.winner === null ? 0.5 : r.winner === r.v2Side ? 1 : 0), 0) / rs.length) * 100).toFixed(1) : '-'
+  console.log(`新版执红得分率 ${sr(asRed)}%，执黑得分率 ${sr(asBlack)}%`)
+  console.log(`回合数中位 ${rounds[Math.floor(n / 2)]}`)
 }

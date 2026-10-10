@@ -116,6 +116,8 @@ export interface BotOptions {
   quiescence?: boolean
   noise?: number
   pick?: 'random' | 'best'
+  /** 评估函数版本：1 为最初的简单版，2 为加入位置分、灵活性、悬子与将帅安全的版本（默认） */
+  evalVersion?: 1 | 2
   /** 随机数来源，便于复现 */
   rng?: () => number
 }
@@ -166,6 +168,7 @@ export function chooseAction(state: GameState, side: Side, opts: BotOptions = {}
     quiescence: opts.quiescence ?? preset?.quiescence ?? false,
     noise: opts.noise ?? preset?.noise ?? 0.3,
     weights: PERSONALITIES[personality].weights,
+    evaluate: (opts.evalVersion ?? 2) === 1 ? evaluate : evaluateV2,
     rng,
   })
   return toAction(best)
@@ -173,12 +176,15 @@ export function chooseAction(state: GameState, side: Side, opts: BotOptions = {}
 
 // ───────────── 搜索 ─────────────
 
+type EvalFn = (state: GameState, side: Side, w: Weights, hangingTerm: boolean) => number
+
 interface SearchParams {
   maxDepth: number
   timeMs: number
   quiescence: boolean
   noise: number
   weights: Weights
+  evaluate: EvalFn
   rng: () => number
 }
 
@@ -213,7 +219,7 @@ class Searcher {
       if (child.winner) return -WIN + ply
       return this.p.weights.draw
     }
-    if (child.phase === 'draft') return evaluate(child, parentSide, this.p.weights, !this.p.quiescence)
+    if (child.phase === 'draft') return this.p.evaluate(child, parentSide, this.p.weights, !this.p.quiescence)
     if (child.turn === parentSide) return this.negamax(child, depth, alpha, beta, ply) // 额外行动：仍然是我走
     return -this.negamax(child, depth, -beta, -alpha, ply)
   }
@@ -222,7 +228,9 @@ class Searcher {
     this.checkTime()
     if (this.aborted) return 0
     if (depth <= 0) {
-      return this.p.quiescence ? this.qsearch(state, alpha, beta, ply, 6) : evaluate(state, state.turn, this.p.weights, true)
+      return this.p.quiescence
+        ? this.qsearch(state, alpha, beta, ply, 6)
+        : this.p.evaluate(state, state.turn, this.p.weights, true)
     }
 
     const key = ttKey(state)
@@ -263,17 +271,22 @@ class Searcher {
   qsearch(state: GameState, alpha: number, beta: number, ply: number, qdepth: number): number {
     this.checkTime()
     if (this.aborted) return 0
-    const standPat = evaluate(state, state.turn, this.p.weights, false)
+    const standPat = this.p.evaluate(state, state.turn, this.p.weights, false)
     if (standPat >= beta || qdepth === 0) return standPat
     if (standPat > alpha) alpha = standPat
 
-    const captures = orderCaptures(state, legalMoves(state).filter((m) => m.captureId))
+    // 只看真正能吃掉的子：被护盾或锦囊挡下的"吃子"只会掉护盾、棋子还在原地，
+    // 放进静态搜索会一路连锁展开，留给正常搜索处理
+    const captures = orderCaptures(
+      state,
+      legalMoves(state).filter((m) => m.captureId && !isProtected(state, state.pieces.find((p) => p.id === m.captureId)!)),
+    )
     let best = standPat
     for (const m of captures) {
       const child = applyTrustedMove(state, m)
       let score: number
       if (child.phase === 'over') score = child.winner === state.turn ? WIN - ply : child.winner ? -WIN + ply : this.p.weights.draw
-      else if (child.phase === 'draft') score = evaluate(child, state.turn, this.p.weights, false)
+      else if (child.phase === 'draft') score = this.p.evaluate(child, state.turn, this.p.weights, false)
       else if (child.turn === state.turn) score = this.qsearch(child, alpha, beta, ply + 1, qdepth - 1)
       else score = -this.qsearch(child, -beta, -alpha, ply + 1, qdepth - 1)
       if (this.aborted) return 0
@@ -361,7 +374,7 @@ function orderCaptures(state: GameState, moves: Move[]): Move[] {
 const NEUTRAL: Weights = PERSONALITIES.balanced.weights
 
 /**
- * side 视角的静态评估。
+ * 第一版评估（保留用于对比）：子力 + 推进奖励 + 靠近对方将帅 + 护盾、士象。
  * hangingTerm：没有静态搜索时，用"能立刻吃到的最大价值"粗略补偿悬子
  */
 export function evaluate(state: GameState, side: Side, w: Weights = NEUTRAL, hangingTerm = true): number {
@@ -397,6 +410,131 @@ export function evaluate(state: GameState, side: Side, w: Weights = NEUTRAL, han
       if (!isProtected(state, t)) bestGain = Math.max(bestGain, VALUE[t.type])
     }
     score += bestGain * 0.7
+  }
+  return score
+}
+
+// ───────────── 第二版评估 ─────────────
+
+/** 从 side 的角度看第几行：0 为对方底线，9 为己方底线；<= 4 表示已过河 */
+const rankOf = (side: Side, y: number) => (side === 'red' ? y : 9 - y)
+
+/** 位置分：只依赖棋子类型和位置，与锦囊无关 */
+function positional(type: PieceType, side: Side, x: number, y: number): number {
+  const r = rankOf(side, y)
+  const center = x >= 3 && x <= 5
+  switch (type) {
+    case 'R':
+      // 车困在底线不好，出到河口、对方二路好
+      return (r === 9 ? -0.25 : 0) + (r <= 2 ? 0.25 : r <= 6 ? 0.12 : 0) + (center && r <= 6 ? 0.05 : 0)
+    case 'N':
+      // 马怕边、怕窝在底线，中路和河口最活
+      return -0.07 * Math.abs(x - 4) + (r === 9 ? -0.25 : 0) + (r >= 2 && r <= 5 ? 0.2 : r <= 1 ? 0.05 : 0)
+    case 'C':
+      // 中炮有威胁；炮钻到对方底线附近反而容易被困
+      return (x === 4 ? 0.15 : 0) + (r <= 1 ? -0.1 : 0)
+    case 'K':
+      // 将帅待在九宫底线中央最安全，没事别乱动
+      return (x === 4 ? 0 : -0.1) + (r === 9 ? 0 : -0.15)
+    case 'P':
+      if (r > 4) return r === 5 ? 0.05 : 0
+      // 过河兵：越靠近九宫越好，到了底线只能横走，价值下降
+      return Math.min(9 - r, 7) * 0.1 + (center ? 0.15 : 0) + (r === 0 ? -0.3 : 0)
+    default:
+      return 0
+  }
+}
+
+/** 灵活性：每个可走的格子值多少分 */
+const MOBILITY: Partial<Record<PieceType, number>> = { R: 0.025, N: 0.06, C: 0.02 }
+
+/**
+ * 第二版评估：子力 + 位置分 + 灵活性 + 悬子 + 将帅安全 + 护盾、士象。
+ * 双方走法各生成一次，从中得到灵活性、攻击范围和保护关系。
+ * 所有走法都来自规则引擎，所以锦囊带来的变化（比如车能斜走）会自动反映在评分里。
+ */
+export function evaluateV2(state: GameState, side: Side, w: Weights = NEUTRAL): number {
+  const byId = new Map(state.pieces.map((p) => [p.id, p]))
+  const sides: Side[] = ['red', 'black']
+  const defends = { red: new Set<string>(), black: new Set<string>() }
+  const moves = {
+    red: generateMoves(state, 'red', getMods(state, 'red'), defends.red),
+    black: generateMoves(state, 'black', getMods(state, 'black'), defends.black),
+  }
+
+  // 轮到走的一方能直接吃掉对方将帅：胜负已定
+  if (state.phase === 'play') {
+    const target = state.pieces.find((p) => p.alive && p.side !== state.turn && p.type === 'K')
+    if (target && !isProtected(state, target) && moves[state.turn].some((m) => m.captureId === target.id)) {
+      return state.turn === side ? WIN / 2 : -WIN / 2
+    }
+  }
+
+  // 每一方能攻击到的空格、对每个敌子的最便宜攻击者、每个子的可走步数
+  const sq = (x: number, y: number) => y * 9 + x
+  const attackSquares = { red: new Set<number>(), black: new Set<number>() }
+  const cheapest = { red: new Map<string, number>(), black: new Map<string, number>() }
+  const mobility = new Map<string, number>()
+  for (const s of sides) {
+    for (const m of moves[s]) {
+      if (m.swapId) continue
+      const a = byId.get(m.pieceId)!
+      mobility.set(a.id, (mobility.get(a.id) ?? 0) + 1)
+      if (m.captureId) {
+        const av = a.type === 'K' ? 100 : VALUE[a.type]
+        const prev = cheapest[s].get(m.captureId)
+        if (prev === undefined || av < prev) cheapest[s].set(m.captureId, av)
+      } else if (a.type !== 'C') {
+        // 炮平移到的格子并不受它攻击
+        attackSquares[s].add(sq(m.to.x, m.to.y))
+      }
+    }
+  }
+
+  let score = 0
+  for (const p of state.pieces) {
+    if (!p.alive) continue
+    const sign = p.side === side ? 1 : -1
+    const enemy = other(p.side)
+    const val = p.type === 'P' && crossedRiver(p.side, p.y) ? 2 : VALUE[p.type]
+    let v = val + positional(p.type, p.side, p.x, p.y)
+    v += (mobility.get(p.id) ?? 0) * (MOBILITY[p.type] ?? 0)
+    v += Math.min(p.shield, 2) * (p.type === 'K' ? 3 : Math.min(VALUE[p.type], 4) * 0.5) * w.defense
+    if (p.type === 'A' || p.type === 'B') v += 0.3 * w.defense
+
+    if (p.type !== 'K') {
+      const attacker = isProtected(state, p) ? undefined : cheapest[enemy].get(p.id)
+      const defended = defends[p.side].has(p.id)
+      const myMove = state.turn === p.side
+      if (attacker !== undefined) {
+        // 悬子：轮到自己还来得及救，轮到对方基本就丢了
+        if (!defended) v -= (myMove ? 0.15 : 0.6) * val
+        else if (attacker < val) v -= (myMove ? 0.1 : 0.5) * (val - attacker)
+      } else if (!defended && (p.type === 'R' || p.type === 'N' || p.type === 'C')) {
+        v -= 0.06 * Math.min(val, 4) // 没有保护的大子，容易被抓
+      }
+    }
+    score += sign * v
+  }
+
+  // 将帅安全：安全出口越少、附近敌方攻击子越多越危险
+  for (const s of sides) {
+    const king = state.pieces.find((p) => p.alive && p.side === s && p.type === 'K')
+    if (!king) continue
+    const enemy = other(s)
+    let escapes = 0
+    for (const m of moves[s]) {
+      if (m.pieceId !== king.id || m.swapId) continue
+      const unsafe = m.captureId ? defends[enemy].has(m.captureId) : attackSquares[enemy].has(sq(m.to.x, m.to.y))
+      if (!unsafe) escapes++
+    }
+    let danger = escapes === 0 ? 0.5 : escapes === 1 ? 0.2 : 0
+    for (const q of state.pieces) {
+      if (!q.alive || q.side !== enemy || !(q.type === 'R' || q.type === 'N' || q.type === 'C')) continue
+      if (Math.abs(q.x - king.x) + Math.abs(q.y - king.y) <= 3) danger += 0.2
+    }
+    // 自己的将帅危险按防守权重扣分；对方的将帅危险按进攻权重加分
+    score += s === side ? -danger * w.defense : danger * w.attack
   }
   return score
 }
