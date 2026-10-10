@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUGMENT_LIST,
+  AUGMENTS,
   applyAction,
   canAttackKing,
   createGame,
@@ -234,6 +235,48 @@ describe('锦囊', () => {
     expect(horse.alive).toBe(true)
     expect(horse.shield).toBe(0)
     expect(s.turn).toBe('black')
+  })
+
+  it('带护盾的子吃子会消耗一层护盾', () => {
+    let s = position([
+      ['red', 'R', 0, 9],
+      ['black', 'P', 0, 3],
+      ['black', 'P', 0, 1],
+    ])
+    const rook = () => s.pieces.find((p) => p.type === 'R')!
+    rook().shield = 1
+    s = move(s, [0, 9], [0, 3])
+    expect(rook().shield).toBe(0)
+    expect(s.pieces.find((p) => p.alive && p.x === 0 && p.y === 3)!.type).toBe('R')
+  })
+
+  it('攻击被挡下时，攻击者的护盾不消耗', () => {
+    let s = position([
+      ['red', 'R', 0, 9],
+      ['black', 'N', 0, 3],
+    ])
+    s.pieces.find((p) => p.type === 'R')!.shield = 1
+    s.pieces.find((p) => p.type === 'N')!.shield = 1
+    s = move(s, [0, 9], [0, 3])
+    expect(s.pieces.find((p) => p.type === 'R')!.shield).toBe(1)
+  })
+
+  it('护盾不能叠加：每个子最多 1 层', () => {
+    let s = createGame('cap')
+    s.draft!.sides.red.options = ['tiejia']
+    s.draft!.sides.black.options = [s.draft!.sides.black.options[0]]
+    s = applyAction(s, { type: 'pick', side: 'red', augmentId: 'tiejia' })
+    s = applyAction(s, { type: 'pick', side: 'black', augmentId: s.draft!.sides.black.options[0] })
+    // 再拿满城尽带黄金甲，车已经有护盾，不会变成 2 层
+    s.augments.red.push({ id: 'huangjinjia', data: {} })
+    AUGMENTS.huangjinjia.onPick!(s, 'red', {})
+    expect(s.pieces.filter((p) => p.side === 'red' && p.type === 'R').every((p) => p.shield === 1)).toBe(true)
+  })
+
+  it('众志成城：兵卒过河时获得护盾', () => {
+    let s = position([['red', 'P', 2, 5]], { red: ['zhongzhi'] })
+    s = move(s, [2, 5], [2, 4])
+    expect(s.pieces.find((p) => p.type === 'P')!.shield).toBe(1)
   })
 
   it('金钟罩：将帅挡下一次攻击', () => {
@@ -523,7 +566,7 @@ describe('新锦囊', () => {
     s = applyAction(s, { type: 'pick', side: 'black', augmentId: 'zhongzhi' })
     // 开局底线已满，就近放在己方半场
     expect(s.pieces.filter((p) => p.alive && p.side === 'red' && p.type === 'R')).toHaveLength(3)
-    expect(s.pieces.filter((p) => p.side === 'black' && p.type === 'P').every((p) => p.shield === 2)).toBe(true)
+    expect(s.pieces.filter((p) => p.side === 'black' && p.type === 'P').every((p) => p.shield === 1)).toBe(true)
   })
 })
 

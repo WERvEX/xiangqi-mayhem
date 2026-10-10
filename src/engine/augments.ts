@@ -1,4 +1,4 @@
-import { addLog, crossedRiver, enemyBaseline, other, pieceAt, pieceName, SIDE_NAMES } from './board'
+import { addLog, crossedRiver, enemyBaseline, grantShield, other, pieceAt, pieceName, SIDE_NAMES } from './board'
 import { rngFor } from './rng'
 import type { GameState, Move, Piece, Pos, RuleMods, Side, Tier } from './types'
 
@@ -40,7 +40,7 @@ export interface AugmentDef {
 const at = (p: { x: number; y: number }): Pos => ({ x: p.x, y: p.y })
 
 const addShield = (s: GameState, side: Side, filter: (p: Piece) => boolean) => {
-  for (const p of s.pieces) if (p.alive && p.side === side && filter(p)) p.shield++
+  for (const p of s.pieces) if (p.alive && p.side === side && filter(p)) grantShield(p)
 }
 
 const promote = (s: GameState, p: Piece) => {
@@ -144,22 +144,22 @@ export const AUGMENT_LIST: AugmentDef[] = [
     name: '铁甲战车',
     tier: 'gold',
     glyph: '甲',
-    desc: '你最靠前的一个车获得 2 层护盾。护盾会挡下一次吃子，攻击者原地不动。',
-    onPick: (s, side) => {
-      const rooks = s.pieces.filter((p) => p.alive && p.side === side && p.type === 'R')
-      rooks.sort((a, b) => Math.abs(a.y - enemyBaseline(side)) - Math.abs(b.y - enemyBaseline(side)))
-      if (rooks[0]) rooks[0].shield += 2
-    },
+    desc: '你现有的车各获得 1 层护盾。护盾会挡下一次吃子，攻击者原地不动。',
+    onPick: (s, side) => addShield(s, side, (p) => p.type === 'R'),
   },
   {
     id: 'zhongzhi',
     name: '众志成城',
     tier: 'silver',
     glyph: '众',
-    desc: '你现有的兵卒各获得 2 层护盾。',
-    onPick: (s, side) => {
-      addShield(s, side, (p) => p.type === 'P')
-      addShield(s, side, (p) => p.type === 'P')
+    desc: '你现有的兵卒各获得 1 层护盾；之后你的兵卒每次过河时也会获得 1 层护盾。',
+    onPick: (s, side) => addShield(s, side, (p) => p.type === 'P'),
+    onAfterMove: (s, side, ev) => {
+      const p = ev.piece
+      if (ev.blocked || p.type !== 'P') return
+      if (crossedRiver(side, p.y) && !crossedRiver(side, ev.move.from.y) && grantShield(p)) {
+        addLog(s, `众志成城！过河的${pieceName(p)}获得了护盾`, side, { kind: 'shield', pos: at(p) })
+      }
     },
   },
   {
@@ -172,8 +172,7 @@ export const AUGMENT_LIST: AugmentDef[] = [
     onOwnCaptured: (s, side, piece) => {
       if (piece.type !== 'A' && piece.type !== 'B') return
       const king = s.pieces.find((p) => p.alive && p.side === side && p.type === 'K')
-      if (!king) return
-      king.shield++
+      if (!king || !grantShield(king)) return
       addLog(s, `御林军！${pieceName(king)}获得了 1 层护盾`, side, { kind: 'shield', pos: at(king) })
     },
   },
@@ -228,7 +227,7 @@ export const AUGMENT_LIST: AugmentDef[] = [
     desc: '你的马吃子后获得 1 层护盾，并且可以再走一步（可以吃子，但不会再次触发），也可以选择跳过。',
     onAfterMove: (s, side, ev) => {
       if (ev.piece.type === 'N' && ev.captured && !ev.isExtra) {
-        ev.piece.shield++
+        grantShield(ev.piece)
         s.extraMoves.push({ side, pieceId: ev.piece.id, noCapture: false, source: 'huima' })
       }
     },

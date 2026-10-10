@@ -1175,3 +1175,71 @@ button.big small {
 .modal.share .invite {
   width: 100%;
 }
+
+/* ───── 走法推荐 ───── */
+.hint-arrow {
+  pointer-events: none;
+}
+
+.hint-arrow line {
+  stroke: #ffb300;
+  stroke-width: 7;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.hint-ring {
+  fill: rgba(255, 179, 0, 0.18);
+  stroke: #ffb300;
+  stroke-width: 4;
+  stroke-dasharray: 6 4;
+  animation: pulse 0.9s ease-in-out infinite alternate;
+}
+
+.hint-banner {
+  text-align: center;
+  font-size: 13px;
+  color: #ffd36b;
+  background: rgba(255, 179, 0, 0.12);
+  border-radius: 10px;
+  padding: 5px 10px;
+}
+
+.hint-control {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.hint-control select {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid #5a4733;
+  border-radius: 10px;
+  padding: 0 6px;
+}
+
+.hint-note {
+  text-align: center;
+  color: #ffd36b;
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+
+.aug-card.recommended {
+  position: relative;
+  outline: 3px solid #ffb300;
+  outline-offset: 2px;
+}
+
+.recommend-badge {
+  position: absolute;
+  top: -10px;
+  right: -6px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #1d1712;
+  background: #ffb300;
+  border-radius: 999px;
+  padding: 1px 8px;
+}

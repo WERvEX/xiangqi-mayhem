@@ -80,7 +80,7 @@ const AUGMENT_AI: Record<string, [number, Tag]> = {
   yulin: [52, 'defense'],
   liangcao: [55, 'neutral'],
   changtong: [55, 'attack'],
-  tiejia: [58, 'defense'],
+  tiejia: [55, 'defense'],
   lianzhu: [52, 'attack'],
   huoshao: [50, 'attack'],
   huima: [47, 'attack'],

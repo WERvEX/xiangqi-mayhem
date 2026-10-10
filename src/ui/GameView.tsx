@@ -20,8 +20,10 @@ import {
   type Pos,
   type Side,
 } from '../engine'
+import { DIFFICULTIES, type Difficulty } from '../ai/bot'
 import { Board, type FxItem } from './Board'
 import { AugmentCard, AugmentChip, AugmentGlyph, Modal, Rules } from './common'
+import { useHint } from './Hint'
 
 const SIDES: Side[] = ['red', 'black']
 
@@ -46,6 +48,8 @@ export interface GameViewProps {
   extraControls?: ReactNode
   /** 提供时显示"分享回放" */
   onShareReplay?: () => void
+  /** 是否提供 AI 走法推荐（联机和回放中关闭） */
+  hints?: boolean
 }
 
 /** 对局界面。新开一局时请用 key 重新挂载，以重置界面状态。 */
@@ -63,6 +67,7 @@ export function GameView({
   labels,
   extraControls,
   onShareReplay,
+  hints = false,
 }: GameViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [flipped, setFlipped] = useState(mySide === 'black')
@@ -140,6 +145,17 @@ export function GameView({
   }
   const waitingOpponentDraft = !!(draft && mySide && draft.sides[mySide].done)
 
+  // 走法推荐：轮到本机这边操作时才能请求
+  const hintActor: Side | null = !hints || spectator ? null : myTurn ? state.turn : draftSide
+  const hint = useHint(state, hintActor)
+  const hintAction = hint.hint
+  const hintMove =
+    hintAction?.type === 'move'
+      ? moves.find((m) => m.pieceId === hintAction.pieceId && m.to.x === hintAction.to.x && m.to.y === hintAction.to.y)
+      : undefined
+  const recommended = hintAction?.type === 'pick' ? hintAction.augmentId : null
+  const rerollAdvised = hintAction?.type === 'reroll'
+
   const resignSide = mySide ?? state.turn
   const next = nextDraftRound(state)
   const topSide: Side = flipped ? 'red' : 'black'
@@ -188,6 +204,7 @@ export function GameView({
           guardedKingIds={guardedKingIds}
           ghosts={ghosts}
           fx={fx}
+          hint={hintMove}
           onClickPoint={onClickPoint}
         />
       </div>
@@ -203,6 +220,12 @@ export function GameView({
       <div className="status-bar">
         <span>{statusText}</span>
       </div>
+
+      {hintMove && (
+        <div className="hint-banner">
+          💡 AI（{DIFFICULTIES[hint.level].name}）推荐的走法已用金色箭头标出
+        </div>
+      )}
 
       {extra && myTurn && (
         <div className="extra-banner">
@@ -228,6 +251,25 @@ export function GameView({
           规则
         </button>
         {extraControls}
+        {hints && !spectator && state.phase === 'play' && (
+          <span className="hint-control">
+            <select
+              value={hint.level}
+              onChange={(e) => hint.setLevel(e.target.value as Difficulty)}
+              aria-label="推荐强度"
+              title="推荐强度"
+            >
+              {(Object.keys(DIFFICULTIES) as Difficulty[]).map((d) => (
+                <option key={d} value={d}>
+                  {DIFFICULTIES[d].name}
+                </option>
+              ))}
+            </select>
+            <button type="button" onClick={hint.ask} disabled={!hint.canAsk || hint.thinking || !!hintMove}>
+              {hint.thinking ? '思考中…' : '💡 提示'}
+            </button>
+          </span>
+        )}
         {!spectator &&
           (state.phase === 'over' ? (
             <button type="button" onClick={onRestart} disabled={restartDisabled}>
@@ -268,6 +310,17 @@ export function GameView({
           onPick={(id) => dispatch({ type: 'pick', side: draftSide, augmentId: id })}
           onReroll={() => dispatch({ type: 'reroll', side: draftSide })}
           onHide={() => setDraftHidden(true)}
+          hint={
+            hints
+              ? {
+                  level: hint.level,
+                  thinking: hint.thinking,
+                  recommended,
+                  rerollAdvised,
+                  onAsk: hint.ask,
+                }
+              : undefined
+          }
         />
       )}
 
@@ -306,6 +359,9 @@ export function GameView({
                 保存回放
               </button>
             )}
+            <button type="button" onClick={onExit}>
+              返回主页
+            </button>
             <button type="button" className="primary" onClick={onRestart} disabled={restartDisabled}>
               {restartLabel}
             </button>
@@ -405,12 +461,20 @@ function DraftModal({
   onPick,
   onReroll,
   onHide,
+  hint,
 }: {
   state: GameState
   side: Side
   onPick: (id: string) => void
   onReroll: () => void
   onHide: () => void
+  hint?: {
+    level: Difficulty
+    thinking: boolean
+    recommended: string | null
+    rerollAdvised: boolean
+    onAsk: () => void
+  }
 }) {
   const ds = state.draft!.sides[side]
   const opponent = state.augments[other(side)]
@@ -425,7 +489,13 @@ function DraftModal({
       </p>
       <div className="aug-cards" key={ds.rerollNo}>
         {ds.options.map((id, i) => (
-          <AugmentCard key={id} id={id} onClick={() => onPick(id)} delay={i * 90} />
+          <AugmentCard
+            key={id}
+            id={id}
+            onClick={() => onPick(id)}
+            delay={i * 90}
+            recommended={hint?.recommended === id}
+          />
         ))}
       </div>
       {opponent.length > 0 && (
@@ -439,10 +509,21 @@ function DraftModal({
           ))}
         </p>
       )}
+      {hint?.rerollAdvised && <p className="hint-note">💡 AI 觉得这三个都不太理想，建议刷新</p>}
       <div className="modal-actions">
         <button type="button" onClick={onHide}>
           看一眼棋盘
         </button>
+        {hint && (
+          <button
+            type="button"
+            onClick={hint.onAsk}
+            disabled={hint.thinking || !!hint.recommended || hint.rerollAdvised}
+            title={`按「${DIFFICULTIES[hint.level].name}」难度的 AI 推荐`}
+          >
+            {hint.thinking ? '思考中…' : '💡 AI 推荐'}
+          </button>
+        )}
         <button type="button" onClick={onReroll} disabled={state.rerollsLeft[side] <= 0}>
           刷新选项（剩 {state.rerollsLeft[side]} 次）
         </button>

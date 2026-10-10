@@ -91,6 +91,8 @@ scripts/simulate.ts  # 自我对战统计
 
 `data` 是每个锦囊实例自己的数字状态（如计数器），会随状态一起克隆。
 
+**加护盾请用 `grantShield(piece)`**（`board.ts`），不要直接 `piece.shield++`：每个子最多 `MAX_SHIELD`（目前为 1）层护盾。另外，带护盾的子主动吃子会消耗一层护盾，这条规则在 `game.ts` 的走子逻辑里统一处理。
+
 日志可以带特效：`addLog(s, 文本, side, { kind: 'revive', pos })`，界面会在对应格子播放动画，`kind` 见 `FxKind`。
 
 新增锦囊后：

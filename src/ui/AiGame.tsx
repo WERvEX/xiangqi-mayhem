@@ -123,8 +123,8 @@ function AiMatch({
 
   const aiToAct = (s: GameState) =>
     (s.phase === 'play' && s.turn === aiSide) || (s.phase === 'draft' && !s.draft!.sides[aiSide].done)
-  const humanToAct = (s: GameState) =>
-    (s.phase === 'play' && s.turn === humanSide) || (s.phase === 'draft' && !s.draft!.sides[humanSide].done)
+  // 悔棋只停在轮到你走棋的局面：锦囊选择跟着它前面那步棋一起撤回
+  const humanToMove = (s: GameState) => s.phase === 'play' && s.turn === humanSide
   const thinking = aiToAct(state)
 
   useEffect(() => () => botRef.current?.dispose(), [])
@@ -182,7 +182,8 @@ function AiMatch({
         banner={banner}
         onExit={onExit}
         // 连同 AI 的应对一起撤回，回到你上一次行动之前
-        onUndo={canUndo ? () => undo(humanToAct) : undefined}
+        onUndo={canUndo ? () => undo(humanToMove) : undefined}
+        hints
         onRestart={restart}
         onShareReplay={
           actions.length > 0

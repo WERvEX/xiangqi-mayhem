@@ -37,6 +37,8 @@ interface Props {
   /** 刚被吃掉的棋子，播放淡出动画 */
   ghosts: Piece[]
   fx: FxItem[]
+  /** AI 推荐的走法，用金色箭头标出 */
+  hint?: Move
   onClickPoint(pos: Pos): void
 }
 
@@ -96,6 +98,7 @@ export function Board({
   guardedKingIds,
   ghosts,
   fx,
+  hint,
   onClickPoint,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -147,6 +150,9 @@ export function Board({
           <stop offset="50%" stopColor="#deb173" />
           <stop offset="100%" stopColor="#e7c182" />
         </linearGradient>
+        <marker id="hintArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#ffb300" />
+        </marker>
         <radialGradient id="vignette" cx="50%" cy="50%" r="70%">
           <stop offset="70%" stopColor="#000" stopOpacity="0" />
           <stop offset="100%" stopColor="#3a2108" stopOpacity="0.28" />
@@ -201,6 +207,8 @@ export function Board({
         return <circle key={key} className="target-dot" cx={cx} cy={cy} r="8" />
       })}
 
+      {hint && <HintArrow x1={px(hint.from.x)} y1={py(hint.from.y)} x2={px(hint.to.x)} y2={py(hint.to.y)} />}
+
       {fx.map((f) => (
         <g key={f.key} transform={`translate(${px(f.pos.x)} ${py(f.pos.y)})`} className={`fx fx-${f.kind}`}>
           <circle className="fx-ring" r="26" />
@@ -213,6 +221,29 @@ export function Board({
         </g>
       ))}
     </svg>
+  )
+}
+
+function HintArrow({ x1, y1, x2, y2 }: { x1: number; y1: number; x2: number; y2: number }) {
+  // 箭头从起点棋子边缘指向终点格子边缘
+  const len = Math.hypot(x2 - x1, y2 - y1)
+  const ux = (x2 - x1) / len
+  const uy = (y2 - y1) / len
+  // 两端让出一段避免压住棋子；相邻两格距离很短，按比例缩小，保证箭头始终可见
+  const start = Math.min(26, len * 0.25)
+  const end = Math.min(30, len * 0.3)
+  return (
+    <g className="hint-arrow">
+      <circle cx={x1} cy={y1} r="30" className="hint-ring" />
+      <circle cx={x2} cy={y2} r="30" className="hint-ring" />
+      <line
+        x1={x1 + ux * start}
+        y1={y1 + uy * start}
+        x2={x2 - ux * end}
+        y2={y2 - uy * end}
+        markerEnd="url(#hintArrow)"
+      />
+    </g>
   )
 }
 

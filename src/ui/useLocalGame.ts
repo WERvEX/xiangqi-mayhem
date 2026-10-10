@@ -28,7 +28,7 @@ export function useLocalGame() {
 
   /**
    * 至少撤回一步，然后继续撤回，直到 stopAt(局面) 为真或回到开局。
-   * 人机对战用它连同 AI 的应对一起撤回。
+   * 用来连同 AI 的应对、锦囊选择一起撤回到上一次走棋之前。
    */
   const undo = useCallback((stopAt: (s: GameState) => boolean = () => true) => {
     setH((cur) => {

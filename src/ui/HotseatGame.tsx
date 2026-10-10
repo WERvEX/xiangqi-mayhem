@@ -22,7 +22,9 @@ export function HotseatGame({ onExit }: { onExit: () => void }) {
         dispatch={dispatch}
         mySide={null}
         onExit={onExit}
-        onUndo={canUndo ? () => undo() : undefined}
+        // 只停在走棋的局面：锦囊选择跟着它前面那步棋一起撤回
+        onUndo={canUndo ? () => undo((s) => s.phase === 'play') : undefined}
+        hints
         onRestart={restart}
         onShareReplay={
           actions.length > 0 ? () => setSharing(makeReplay(seed, actions, { mode: 'hotseat' })) : undefined

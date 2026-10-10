@@ -24,16 +24,27 @@ export function AugmentGlyph({ id, size = 'md' }: { id: string; size?: 'sm' | 'm
   return <span className={`glyph glyph-${size} tier-${def.tier}`}>{def.glyph}</span>
 }
 
-export function AugmentCard({ id, onClick, delay }: { id: string; onClick?: () => void; delay?: number }) {
+export function AugmentCard({
+  id,
+  onClick,
+  delay,
+  recommended,
+}: {
+  id: string
+  onClick?: () => void
+  delay?: number
+  recommended?: boolean
+}) {
   const def = AUGMENTS[id]
   return (
     <button
       type="button"
-      className={`aug-card tier-${def.tier}${delay !== undefined ? ' deal' : ''}`}
+      className={`aug-card tier-${def.tier}${delay !== undefined ? ' deal' : ''}${recommended ? ' recommended' : ''}`}
       style={delay !== undefined ? { animationDelay: `${delay}ms` } : undefined}
       onClick={onClick}
       disabled={!onClick}
     >
+      {recommended && <span className="recommend-badge">💡 推荐</span>}
       <AugmentGlyph id={id} size="lg" />
       <div className="aug-card-name">{def.name}</div>
       <div className={`tier-label tier-${def.tier}`}>{TIER_NAMES[def.tier]}</div>
@@ -92,7 +103,7 @@ export function Rules() {
         {CONFIG.rerollsPerGame} 次选项。
       </li>
       <li>锦囊分白银、黄金、棱彩三档，越往后品质越高；子力落后较多的一方，选项会提升一档。</li>
-      <li>护盾：挡下一次吃子，攻击者原地不动，消耗本回合。</li>
+      <li>护盾：挡下一次吃子，攻击者原地不动，消耗本回合。每个子最多 1 层；带护盾的子主动吃子时也会消耗护盾。</li>
       <li>同一局面重复三次，或超过 {CONFIG.maxRounds} 回合判和；无棋可走判负。</li>
     </ul>
   )

@@ -64,6 +64,16 @@ export const PIECE_CHARS: Record<Side, Record<PieceType, string>> = {
 
 export const SIDE_NAMES: Record<Side, string> = { red: '红方', black: '黑方' }
 
+/** 每个棋子最多叠几层护盾 */
+export const MAX_SHIELD = 1
+
+/** 给棋子加一层护盾（不超过上限），返回是否真的加上了 */
+export function grantShield(p: Piece): boolean {
+  if (p.shield >= MAX_SHIELD) return false
+  p.shield++
+  return true
+}
+
 export const pieceName = (p: Piece) => PIECE_CHARS[p.side][p.type]
 
 const PIECE_VALUE: Record<PieceType, number> = { K: 0, A: 2, B: 2, N: 4, R: 9, C: 4.5, P: 1 }

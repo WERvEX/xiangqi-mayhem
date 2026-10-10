@@ -18,7 +18,7 @@ import type { Action, DraftSide, GameState, Move, Piece, RuleMods, Side, Tier } 
  * 规则版本。任何会改变对局结果的改动（包括锦囊数值）都要加一。
  * 联机时双方版本必须一致；回放会记录它，版本不同时给出提示。
  */
-export const RULES_VERSION = 2
+export const RULES_VERSION = 3
 
 export const CONFIG = {
   /** 在这些回合发放锦囊；轮流在红方、黑方走棋前发放（见 draftSide） */
@@ -204,6 +204,11 @@ function performMove(s: GameState, move: Move, fast = false) {
       target.alive = false
       captured = target
       addLog(s, `${pieceName(piece)}吃掉了${pieceName(target)}`, side, { kind: 'capture', pos: move.to })
+      // 护盾只擅长防守：带盾的子主动吃子也会消耗一层
+      if (piece.shield > 0) {
+        piece.shield--
+        addLog(s, `${pieceName(piece)}吃子消耗了一层护盾`, side)
+      }
     }
     piece.x = move.to.x
     piece.y = move.to.y
