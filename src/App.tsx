@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { parseReplay, ReplayError, type LoadedReplay } from './replay/replay'
 import { AiGame } from './ui/AiGame'
 import { HotseatGame } from './ui/HotseatGame'
@@ -35,6 +35,16 @@ const clearHash = () => {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>(initialScreen)
+
+  // 页面已经打开时，在同一个标签页里打开回放或邀请链接只会改变 # 后面的部分，不会重新加载，
+  // 所以要监听变化。游戏自己用 history.replaceState 改链接，不会触发这个事件。
+  useEffect(() => {
+    const onHashChange = () => {
+      if (/room=|replay=/.test(location.hash)) setScreen(initialScreen())
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
   const home = () => {
     clearHash()
     setScreen({ name: 'home' })
