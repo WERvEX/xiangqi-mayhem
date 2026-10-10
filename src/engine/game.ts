@@ -14,6 +14,12 @@ import { generateMoves } from './movegen'
 import { rngFor, shuffle } from './rng'
 import type { Action, DraftSide, GameState, Move, Piece, RuleMods, Side, Tier } from './types'
 
+/**
+ * 规则版本。任何会改变对局结果的改动（包括锦囊数值）都要加一。
+ * 联机时双方版本必须一致；回放会记录它，版本不同时给出提示。
+ */
+export const RULES_VERSION = 2
+
 export const CONFIG = {
   /** 在这些回合发放锦囊；轮流在红方、黑方走棋前发放（见 draftSide） */
   draftRounds: [1, 5, 10, 16],
@@ -157,7 +163,20 @@ function doMove(s: GameState, action: Extract<Action, { type: 'move' }>) {
     (m) => m.pieceId === action.pieceId && m.to.x === action.to.x && m.to.y === action.to.y,
   )
   if (!move) throw new IllegalActionError('不合法的走法')
+  performMove(s, move)
+}
 
+/**
+ * 直接执行一个由 legalMoves 生成的走法，跳过合法性查找。
+ * 供 AI 搜索使用：搜索里每个节点都要走很多步，省掉一次走法生成能快不少。
+ */
+export function applyTrustedMove(prev: GameState, move: Move): GameState {
+  const s = cloneState(prev)
+  performMove(s, move)
+  return s
+}
+
+function performMove(s: GameState, move: Move) {
   const side = s.turn
   const piece = getPiece(s, move.pieceId)
   const target = move.captureId ? getPiece(s, move.captureId) : null
@@ -254,7 +273,8 @@ function finish(s: GameState, winner: Side | null, reason: string) {
   addLog(s, reason)
 }
 
-function positionKey(s: GameState): string {
+/** 局面标识：用于三次重复判和，也供 AI 的置换表使用 */
+export function positionKey(s: GameState): string {
   const pieces = s.pieces
     .filter((p) => p.alive)
     .map((p) => `${p.id}${p.type}${p.x}${p.y}${p.shield}`)

@@ -1055,3 +1055,123 @@ button.big small {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ───── 主页按钮行 ───── */
+.home-row {
+  display: flex;
+  gap: 12px;
+}
+
+.home-row button {
+  flex: 1;
+}
+
+/* ───── 人机对战设置 ───── */
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.option-grid.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+  border-width: 2px;
+}
+
+.option span {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.option.on {
+  border-color: var(--accent);
+  background: #45372a;
+}
+
+@media (max-width: 420px) {
+  .option-grid.three {
+    grid-template-columns: 1fr;
+  }
+}
+
+.conn-banner button {
+  margin-left: auto;
+}
+
+/* ───── 回放 ───── */
+.replay-bar {
+  background: var(--bg-2);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.replay-meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.replay-meta b {
+  color: var(--accent);
+}
+
+.replay-meta .warn {
+  color: #f0d080;
+}
+
+.replay-controls {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.replay-controls button {
+  min-width: 44px;
+  padding: 6px 10px;
+}
+
+.replay-scrub {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.replay-step {
+  text-align: center;
+  font-size: 12px;
+}
+
+.replay-input {
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: #1d1712;
+  border: 1px solid #5a4733;
+  border-radius: 10px;
+  padding: 8px;
+  resize: vertical;
+  word-break: break-all;
+}
+
+.error-text.center {
+  text-align: center;
+}
+
+.modal.share {
+  width: min(460px, 100%);
+}
+
+.modal.share .invite {
+  width: 100%;
+}

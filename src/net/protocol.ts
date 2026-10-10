@@ -1,7 +1,10 @@
-import type { Action, Side } from '../engine'
+import { RULES_VERSION, type Action, type Side } from '../engine'
 
-/** 规则或协议有不兼容改动时加一，双方版本不一致会拒绝连接 */
-export const PROTOCOL_VERSION = 2
+/**
+ * 双方版本不一致会拒绝连接。目前直接使用规则版本：
+ * 规则不同的两端各自计算会得到不同的局面。
+ */
+export const PROTOCOL_VERSION = RULES_VERSION
 
 export type NetMessage =
   /** 客人 → 房主：加入或重连 */

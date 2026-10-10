@@ -253,6 +253,11 @@ export class OnlineSession {
 
   // ───────────── 双方共用 ─────────────
 
+  /** 当前这局的种子和操作序列，用于生成回放 */
+  replayData(): { seed: string; actions: Action[] } {
+    return { seed: this.seed, actions: [...this.actions] }
+  }
+
   submit(action: Action) {
     if (this.snapshot.role === 'host') this.hostApply(action, this.snapshot.mySide!)
     else this.conn?.send({ t: 'submit', action })

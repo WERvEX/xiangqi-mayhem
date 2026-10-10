@@ -1,8 +1,10 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { SIDE_NAMES, type Side } from '../engine'
+import { other, SIDE_NAMES, type Side } from '../engine'
 import { peerTransport } from '../net/peerTransport'
 import { OnlineSession } from '../net/session'
+import { makeReplay, type Replay } from '../replay/replay'
 import { GameView } from './GameView'
+import { ReplayShareModal } from './Replay'
 
 const inviteLink = (code: string) => `${location.origin}${location.pathname}#room=${code}`
 
@@ -122,6 +124,7 @@ function Lobby({
 function OnlineRoom({ session, onLeave }: { session: OnlineSession; onLeave: () => void }) {
   const snap = useSyncExternalStore(session.subscribe, session.getSnapshot)
   const [copied, setCopied] = useState(false)
+  const [sharing, setSharing] = useState<Replay | null>(null)
 
   const inGame = snap.status === 'playing'
 
@@ -240,17 +243,26 @@ function OnlineRoom({ session, onLeave }: { session: OnlineSession; onLeave: () 
     )
   }
 
+  const shareReplay = () => {
+    const { seed, actions } = session.replayData()
+    setSharing(makeReplay(seed, actions, { mode: 'online', [mySide]: '我', [other(mySide)]: '对手' }))
+  }
+
   return (
-    <GameView
-      key={state.seed}
-      state={state}
-      dispatch={(a) => session.submit(a)}
-      mySide={mySide}
-      onExit={confirmLeave}
-      onRestart={() => session.requestRematch()}
-      restartLabel={restartLabel}
-      restartDisabled={votes.includes(mySide) || !snap.opponentOnline}
-      banner={banner}
-    />
+    <>
+      <GameView
+        key={state.seed}
+        state={state}
+        dispatch={(a) => session.submit(a)}
+        mySide={mySide}
+        onExit={confirmLeave}
+        onRestart={() => session.requestRematch()}
+        restartLabel={restartLabel}
+        restartDisabled={votes.includes(mySide) || !snap.opponentOnline}
+        banner={banner}
+        onShareReplay={shareReplay}
+      />
+      {sharing && <ReplayShareModal replay={sharing} onClose={() => setSharing(null)} />}
+    </>
   )
 }

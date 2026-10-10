@@ -38,6 +38,14 @@ export interface GameViewProps {
   restartDisabled?: boolean
   /** 显示在顶部的提示条（联机状态等） */
   banner?: ReactNode
+  /** 观战模式（回放）：不能操作，只显示棋局 */
+  spectator?: boolean
+  /** 自定义双方的称呼，如"（AI·困难）" */
+  labels?: Partial<Record<Side, string>>
+  /** 额外的控制按钮 */
+  extraControls?: ReactNode
+  /** 提供时显示"分享回放" */
+  onShareReplay?: () => void
 }
 
 /** 对局界面。新开一局时请用 key 重新挂载，以重置界面状态。 */
@@ -51,6 +59,10 @@ export function GameView({
   restartLabel = '再来一局',
   restartDisabled = false,
   banner,
+  spectator = false,
+  labels,
+  extraControls,
+  onShareReplay,
 }: GameViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [flipped, setFlipped] = useState(mySide === 'black')
@@ -81,7 +93,7 @@ export function GameView({
   }
 
   const canAct = (side: Side) => mySide === null || mySide === side
-  const myTurn = state.phase === 'play' && canAct(state.turn)
+  const myTurn = !spectator && state.phase === 'play' && canAct(state.turn)
 
   const moves = useMemo(() => legalMoves(state), [state])
   const extra = state.extraMoves[0]
@@ -122,7 +134,7 @@ export function GameView({
 
   const draft = state.draft
   let draftSide: Side | null = null
-  if (draft) {
+  if (draft && !spectator) {
     if (mySide) draftSide = draft.sides[mySide].done ? null : mySide
     else draftSide = SIDES.find((s) => !draft.sides[s].done) ?? null
   }
@@ -136,10 +148,10 @@ export function GameView({
   if (state.phase === 'over') {
     statusText = `${state.winner ? `${SIDE_NAMES[state.winner]}胜` : '和棋'} · ${state.endReason}`
   } else if (state.phase === 'draft') {
-    statusText = waitingOpponentDraft ? '等待对方选择锦囊…' : '选择锦囊中'
+    statusText = spectator ? '双方选择锦囊中' : waitingOpponentDraft ? '等待对方选择锦囊…' : '选择锦囊中'
   } else {
     let who: ReactNode
-    if (!mySide) {
+    if (!mySide || spectator) {
       who = (
         <>
           <b className={`side-text ${state.turn}`}>{SIDE_NAMES[state.turn]}</b>走棋
@@ -164,7 +176,7 @@ export function GameView({
   return (
     <div className="game">
       {banner}
-      <PlayerPanel state={state} side={topSide} mySide={mySide} onInfo={setInfoId} />
+      <PlayerPanel state={state} side={topSide} mySide={mySide} label={labels?.[topSide]} onInfo={setInfoId} />
 
       <div className="board-wrap">
         <Board
@@ -180,7 +192,13 @@ export function GameView({
         />
       </div>
 
-      <PlayerPanel state={state} side={other(topSide)} mySide={mySide} onInfo={setInfoId} />
+      <PlayerPanel
+        state={state}
+        side={other(topSide)}
+        mySide={mySide}
+        label={labels?.[other(topSide)]}
+        onInfo={setInfoId}
+      />
 
       <div className="status-bar">
         <span>{statusText}</span>
@@ -198,7 +216,7 @@ export function GameView({
       )}
 
       <div className="controls">
-        {onUndo && (
+        {onUndo && !spectator && (
           <button type="button" onClick={onUndo}>
             悔棋
           </button>
@@ -209,19 +227,26 @@ export function GameView({
         <button type="button" onClick={() => setShowRules(true)}>
           规则
         </button>
-        {state.phase === 'over' ? (
-          <button type="button" onClick={onRestart} disabled={restartDisabled}>
-            {restartLabel}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              const who = mySide ? '' : SIDE_NAMES[resignSide]
-              if (confirm(`${who}确定要认输吗？`)) dispatch({ type: 'resign', side: resignSide })
-            }}
-          >
-            认输
+        {extraControls}
+        {!spectator &&
+          (state.phase === 'over' ? (
+            <button type="button" onClick={onRestart} disabled={restartDisabled}>
+              {restartLabel}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                const who = mySide ? '' : SIDE_NAMES[resignSide]
+                if (confirm(`${who}确定要认输吗？`)) dispatch({ type: 'resign', side: resignSide })
+              }}
+            >
+              认输
+            </button>
+          ))}
+        {onShareReplay && (
+          <button type="button" onClick={onShareReplay}>
+            分享回放
           </button>
         )}
         <button type="button" onClick={onExit}>
@@ -268,7 +293,7 @@ export function GameView({
         </Modal>
       )}
 
-      {state.phase === 'over' && !overDismissed && (
+      {state.phase === 'over' && !overDismissed && !spectator && (
         <Modal onClose={() => setOverDismissed(true)} className="game-over">
           <h2 className={state.winner ? `side-text ${state.winner}` : ''}>{overTitle}</h2>
           <p>{state.endReason}</p>
@@ -276,6 +301,11 @@ export function GameView({
             <button type="button" onClick={() => setOverDismissed(true)}>
               查看棋盘
             </button>
+            {onShareReplay && (
+              <button type="button" onClick={onShareReplay}>
+                保存回放
+              </button>
+            )}
             <button type="button" className="primary" onClick={onRestart} disabled={restartDisabled}>
               {restartLabel}
             </button>
@@ -313,11 +343,13 @@ function PlayerPanel({
   state,
   side,
   mySide,
+  label,
   onInfo,
 }: {
   state: GameState
   side: Side
   mySide: Side | null
+  label?: string
   onInfo: (id: string) => void
 }) {
   const active = state.phase !== 'over' && state.turn === side
@@ -332,7 +364,11 @@ function PlayerPanel({
       <div className="player-head">
         <span className={`side-dot ${side}`} />
         <b>{SIDE_NAMES[side]}</b>
-        {mySide && <span className="muted">{mySide === side ? '（你）' : '（对方）'}</span>}
+        {label ? (
+          <span className="muted">{label}</span>
+        ) : (
+          mySide && <span className="muted">{mySide === side ? '（你）' : '（对方）'}</span>
+        )}
         {diff !== 0 && (
           <span className={`material ${diff > 0 ? 'up' : 'down'}`} title="子力差">
             {diff > 0 ? '+' : ''}
