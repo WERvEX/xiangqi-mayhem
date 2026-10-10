@@ -171,12 +171,14 @@ function doMove(s: GameState, action: Extract<Action, { type: 'move' }>) {
  * 供 AI 搜索使用：搜索里每个节点都要走很多步，省掉一次走法生成能快不少。
  */
 export function applyTrustedMove(prev: GameState, move: Move): GameState {
-  const s = cloneState(prev)
-  performMove(s, move)
+  // 搜索产生的局面只读不写重复局面表，可以共享，不必拷贝
+  const s = cloneState(prev, true)
+  performMove(s, move, true)
   return s
 }
 
-function performMove(s: GameState, move: Move) {
+/** fast：AI 搜索用，跳过"无棋可走"检查（它要再生成一遍走法，而搜索马上就会生成） */
+function performMove(s: GameState, move: Move, fast = false) {
   const side = s.turn
   const piece = getPiece(s, move.pieceId)
   const target = move.captureId ? getPiece(s, move.captureId) : null
@@ -231,7 +233,7 @@ function performMove(s: GameState, move: Move) {
     }
     s.extraMoves = []
   }
-  endTurn(s)
+  endTurn(s, fast)
 }
 
 function doSkip(s: GameState, side: Side) {
@@ -242,21 +244,26 @@ function doSkip(s: GameState, side: Side) {
   if (s.extraMoves.length === 0 || legalMoves(s).length === 0) endTurn(s)
 }
 
-function endTurn(s: GameState) {
+function endTurn(s: GameState, fast = false) {
   s.extraMoves = []
   s.turnNo++
   s.turn = other(s.turn)
 
   const key = positionKey(s)
-  s.positionCounts[key] = (s.positionCounts[key] ?? 0) + 1
-  if (s.positionCounts[key] >= 3) return finish(s, null, '同一局面重复三次，判和')
+  if (fast) {
+    // AI 搜索：只看真实对局里这个局面是否已经出现过两次，不写入
+    if ((s.positionCounts[key] ?? 0) >= 2) return finish(s, null, '同一局面重复三次，判和')
+  } else {
+    s.positionCounts[key] = (s.positionCounts[key] ?? 0) + 1
+    if (s.positionCounts[key] >= 3) return finish(s, null, '同一局面重复三次，判和')
+  }
   if (roundOf(s) > CONFIG.maxRounds) return finish(s, null, `超过 ${CONFIG.maxRounds} 回合，判和`)
 
   if (s.turn === draftSide(s.draftsDone) && CONFIG.draftRounds[s.draftsDone] === roundOf(s)) {
     startDraft(s)
     return
   }
-  checkNoMoves(s)
+  if (!fast) checkNoMoves(s)
 }
 
 function checkNoMoves(s: GameState) {
@@ -391,8 +398,11 @@ export function nextDraftRound(state: GameState): number | null {
 
 const at = (p: { x: number; y: number }) => ({ x: p.x, y: p.y })
 
-/** 比 structuredClone 快得多；日志条目和走法对象创建后不会再被修改，可以共享 */
-function cloneState(s: GameState): GameState {
+/**
+ * 比 structuredClone 快得多；日志条目和走法对象创建后不会再被修改，可以共享。
+ * sharePositions：AI 搜索用，共享重复局面表（搜索里只读不写）
+ */
+function cloneState(s: GameState, sharePositions = false): GameState {
   return {
     ...s,
     pieces: s.pieces.map((p) => ({ ...p })),
@@ -409,7 +419,7 @@ function cloneState(s: GameState): GameState {
       },
     },
     extraMoves: s.extraMoves.map((e) => ({ ...e })),
-    positionCounts: { ...s.positionCounts },
+    positionCounts: sharePositions ? s.positionCounts : { ...s.positionCounts },
     log: [...s.log],
   }
 }

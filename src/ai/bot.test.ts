@@ -110,6 +110,15 @@ describe('规则 AI', () => {
       expect(evaluateV2(out, 'red')).toBeGreaterThan(evaluateV2(home, 'red'))
     })
 
+    it('开局出子评分：车马在原位时开局扣分，中局后不扣', () => {
+      const early = position([['red', 'R', 0, 9]])
+      const late = position([['red', 'R', 0, 9]])
+      late.turnNo = 40 // 第 21 回合
+      const dev = (s: typeof early) => evaluateV2(s, 'red', undefined, true, true) - evaluateV2(s, 'red')
+      expect(dev(early)).toBeLessThan(-0.3)
+      expect(dev(late)).toBe(0)
+    })
+
     it('被攻击又没保护的子扣分，有保护时扣得少', () => {
       // 黑车攻击 (4,5) 的红马；第二个局面里红炮在 (4,7) 隔着兵保护它
       const loose = position([

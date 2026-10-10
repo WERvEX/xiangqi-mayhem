@@ -7,8 +7,12 @@
  *   npm run sim -- --comeback                    # 开启逆风补偿（默认关闭，以便单独衡量锦囊强度）
  *   npm run sim -- --compare --time 150          # AI 新旧评估函数对战：相同思考时间，双方轮流执红
  *   npm run sim -- --compare --depth 3           # 同上，但固定搜索深度（只比较评估函数本身）
+ *   npm run sim -- --compare --new 3 --old 2     # 指定对比的两个评估版本（默认新 3、旧 1）
  *
  * 默认只用少量线程并以最低优先级运行，避免占满 CPU 影响电脑正常使用。
+ *
+ * npm run sim 会先用 esbuild 打包再运行：tsx 为保留函数名插入的辅助调用会明显拖慢走法生成，
+ * 打包后的速度更接近浏览器里的实际表现。
  *
  * 锦囊随机选择（不刷新），这样"拥有某锦囊时的胜率"可以直接反映它的强度。
  */
@@ -33,6 +37,8 @@ interface GameResult {
 interface Compare {
   timeMs: number
   v2Side: Side
+  newVersion: 1 | 2 | 3
+  oldVersion: 1 | 2 | 3
 }
 
 function playGame(seed: string, depth: number, noAugments: boolean, compare?: Compare): GameResult {
@@ -73,7 +79,7 @@ function playGame(seed: string, depth: number, noAugments: boolean, compare?: Co
           quiescence: true,
           noise: 0.1,
           rng,
-          evalVersion: s.turn === compare.v2Side ? 2 : 1,
+          evalVersion: s.turn === compare.v2Side ? compare.newVersion : compare.oldVersion,
         }
       : { depth, rng }
     s = applyAction(s, chooseAction(s, s.turn, opts)!)
@@ -91,12 +97,13 @@ function playGame(seed: string, depth: number, noAugments: boolean, compare?: Co
 }
 
 if (!isMainThread) {
-  const { seeds, depth, noAugments, comeback, compareTime } = workerData as {
+  const { seeds, depth, noAugments, comeback, compareTime, versions } = workerData as {
     seeds: string[]
     depth: number
     noAugments: boolean
     comeback: boolean
     compareTime: number | null
+    versions: [1 | 2 | 3, 1 | 2 | 3]
   }
   // 默认关闭逆风补偿：否则落后方更容易拿到高品质锦囊，会把高品质锦囊的胜率拉低
   if (!comeback) CONFIG.comebackThreshold = Infinity
@@ -105,7 +112,12 @@ if (!isMainThread) {
     const compare =
       compareTime === null
         ? undefined
-        : { timeMs: compareTime, v2Side: (Number(seed.split('-').pop()) % 2 === 0 ? 'red' : 'black') as Side }
+        : {
+            timeMs: compareTime,
+            v2Side: (Number(seed.split('-').pop()) % 2 === 0 ? 'red' : 'black') as Side,
+            newVersion: versions[0],
+            oldVersion: versions[1],
+          }
     parentPort!.postMessage(playGame(seed, depth, noAugments, compare))
   }
 } else {
@@ -120,6 +132,7 @@ if (!isMainThread) {
   const comeback = args.includes('--comeback')
   // 对比模式：给了 --depth 就固定深度、不限时间；否则按 --time 限时
   const compareTime = args.includes('--compare') ? (args.includes('--depth') ? Infinity : arg('time', 150)) : null
+  const versions = [arg('new', 3), arg('old', 1)] as [1 | 2 | 3, 1 | 2 | 3]
   const tag = args.includes('--tag') ? args[args.indexOf('--tag') + 1] : 'sim'
   const threads = Math.max(1, Math.min(arg('threads', 3), availableParallelism() - 1, games))
   try {
@@ -137,8 +150,9 @@ if (!isMainThread) {
       const chunk = seeds.filter((_, i) => i % threads === t)
       return new Promise<void>((resolve, reject) => {
         const w = new Worker(new URL(import.meta.url), {
-          workerData: { seeds: chunk, depth, noAugments, comeback, compareTime },
-          execArgv: ['--import', 'tsx'],
+          workerData: { seeds: chunk, depth, noAugments, comeback, compareTime, versions },
+          // 直接用 tsx 运行 .ts 时需要它加载子线程；用 esbuild 打包成 .mjs 后不需要
+          execArgv: import.meta.url.endsWith('.ts') ? ['--import', 'tsx'] : [],
         })
         w.on('message', (r: GameResult) => {
           results.push(r)
@@ -149,7 +163,7 @@ if (!isMainThread) {
       })
     }),
   )
-  if (compareTime !== null) reportCompare(results, compareTime, (Date.now() - start) / 1000)
+  if (compareTime !== null) reportCompare(results, compareTime, (Date.now() - start) / 1000, versions)
   else report(results, games, depth, noAugments, (Date.now() - start) / 1000)
 }
 
@@ -200,7 +214,7 @@ function report(results: GameResult[], games: number, depth: number, noAugments:
   }
 }
 
-function reportCompare(results: GameResult[], timeMs: number, secs: number) {
+function reportCompare(results: GameResult[], timeMs: number, secs: number, [nv, ov]: [number, number]) {
   const n = results.length
   let score = 0
   let wins = 0
@@ -217,7 +231,7 @@ function reportCompare(results: GameResult[], timeMs: number, secs: number) {
   const rounds = results.map((r) => r.rounds).sort((a, b) => a - b)
   const budget = timeMs === Infinity ? '固定深度' : `每步 ${timeMs}ms`
   console.log(`
-=== 新版评估 vs 旧版评估：${n} 局，${budget}，用时 ${secs.toFixed(0)}s ===`)
+=== 评估 v${nv}（新）vs v${ov}（旧）：${n} 局，${budget}，用时 ${secs.toFixed(0)}s ===`)
   console.log(`新版 胜 ${wins}  负 ${losses}  和 ${n - wins - losses}`)
   console.log(`新版得分率 ${(rate * 100).toFixed(1)}% ±${(ci * 100).toFixed(1)}%（和棋算半分）`)
   const asRed = results.filter((r) => r.v2Side === 'red')

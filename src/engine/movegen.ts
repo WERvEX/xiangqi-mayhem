@@ -28,13 +28,42 @@ const HORSE = [
  * 生成某一方的全部走法（已应用锦囊修改）。
  * 采用"吃将获胜"规则，所以不过滤送将的走法。
  */
-export function generateMoves(state: GameState, side: Side, mods: RuleMods, defends?: Set<string>): Move[] {
-  const grid = buildGrid(state.pieces)
+export function generateMoves(
+  state: GameState,
+  side: Side,
+  mods: RuleMods,
+  defends?: Set<string>,
+  grid: Grid = buildGrid(state.pieces),
+): Move[] {
   const out: Move[] = []
   for (const p of state.pieces) {
     if (p.alive && p.side === side) genPiece(p, grid, mods, out, defends)
   }
   return out
+}
+
+// 当前正在生成走法的棋子和输出位置。
+// 用模块级变量而不是每个棋子新建闭包：走法生成是 AI 搜索里最热的代码，而且是同步的，不会重入。
+let cur: Piece
+let curFrom: { x: number; y: number }
+let curGrid: Grid
+let curOut: Move[]
+let curDefends: Set<string> | undefined
+
+/** 能落子返回 true（空位或敌子） */
+function push(x: number, y: number): boolean {
+  if (!inBounds(x, y)) return false
+  const t = curGrid[y][x]
+  if (t && t.side === cur.side) {
+    curDefends?.add(t.id)
+    return false
+  }
+  curOut.push({ pieceId: cur.id, from: curFrom, to: { x, y }, captureId: t?.id })
+  return true
+}
+
+function occupied(x: number, y: number): boolean {
+  return inBounds(x, y) && curGrid[y][x] !== null
 }
 
 /**
@@ -43,18 +72,11 @@ export function generateMoves(state: GameState, side: Side, mods: RuleMods, defe
  */
 function genPiece(p: Piece, grid: Grid, mods: RuleMods, out: Move[], defends?: Set<string>) {
   const side = p.side
-  /** 能落子返回 true（空位或敌子） */
-  const push = (x: number, y: number): boolean => {
-    if (!inBounds(x, y)) return false
-    const t = grid[y][x]
-    if (t && t.side === side) {
-      defends?.add(t.id)
-      return false
-    }
-    out.push({ pieceId: p.id, from: { x: p.x, y: p.y }, to: { x, y }, captureId: t?.id })
-    return true
-  }
-  const occupied = (x: number, y: number) => inBounds(x, y) && grid[y][x] !== null
+  cur = p
+  curFrom = { x: p.x, y: p.y }
+  curGrid = grid
+  curOut = out
+  curDefends = defends
 
   switch (p.type) {
     case 'K': {
@@ -70,7 +92,7 @@ function genPiece(p: Piece, grid: Grid, mods: RuleMods, out: Move[], defends?: S
           defends?.add(t.id)
           // 移形换影：与相邻的己方棋子换位（只限上下左右）
           if (mods.kingSwap && (dx === 0 || dy === 0)) {
-            out.push({ pieceId: p.id, from: { x: p.x, y: p.y }, to: { x: nx, y: ny }, swapId: t.id })
+            out.push({ pieceId: p.id, from: curFrom, to: { x: nx, y: ny }, swapId: t.id })
           }
           continue
         }

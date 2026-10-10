@@ -1,5 +1,6 @@
 import {
   applyTrustedMove,
+  buildGrid,
   crossedRiver,
   exposesKing,
   findKing,
@@ -9,8 +10,10 @@ import {
   legalMoves,
   other,
   positionKey,
+  roundOf,
   type Action,
   type GameState,
+  type Grid,
   type Move,
   type PieceType,
   type Side,
@@ -116,8 +119,11 @@ export interface BotOptions {
   quiescence?: boolean
   noise?: number
   pick?: 'random' | 'best'
-  /** 评估函数版本：1 为最初的简单版，2 为加入位置分、灵活性、悬子与将帅安全的版本（默认） */
-  evalVersion?: 1 | 2
+  /**
+   * 评估函数版本：1 为最初的简单版；2 加入位置分、灵活性、悬子与将帅安全；
+   * 3 在 2 的基础上加入开局出子评分（默认）
+   */
+  evalVersion?: 1 | 2 | 3
   /** 随机数来源，便于复现 */
   rng?: () => number
 }
@@ -168,11 +174,62 @@ export function chooseAction(state: GameState, side: Side, opts: BotOptions = {}
     quiescence: opts.quiescence ?? preset?.quiescence ?? false,
     noise: opts.noise ?? preset?.noise ?? 0.3,
     weights: PERSONALITIES[personality].weights,
-    evaluate: (opts.evalVersion ?? 2) === 1 ? evaluate : evaluateV2,
+    evaluate: EVALUATORS[opts.evalVersion ?? 3],
     rng,
   })
   return toAction(best)
 }
+
+// ───────────── 走法缓存 ─────────────
+
+interface SideMoves {
+  moves: Move[]
+  /** 受到保护的己方棋子 id */
+  defends: Set<string>
+}
+
+interface Analysis {
+  grid: Grid
+  sides: Partial<Record<Side, SideMoves>>
+}
+
+/**
+ * 同一个局面在搜索里会被多次用到（生成走法、静态搜索、评估），
+ * 把棋盘网格和双方走法缓存在局面对象上，避免重复生成。局面对象不可变，所以缓存不会过期。
+ */
+const analysisCache = new WeakMap<GameState, Analysis>()
+
+function analysis(state: GameState): Analysis {
+  let a = analysisCache.get(state)
+  if (!a) {
+    a = { grid: buildGrid(state.pieces), sides: {} }
+    analysisCache.set(state, a)
+  }
+  return a
+}
+
+function sideMoves(state: GameState, side: Side): SideMoves {
+  const a = analysis(state)
+  let sm = a.sides[side]
+  if (!sm) {
+    const defends = new Set<string>()
+    sm = { moves: generateMoves(state, side, getMods(state, side), defends, a.grid), defends }
+    a.sides[side] = sm
+  }
+  return sm
+}
+
+/** 与 legalMoves 相同（含额外行动的限制），但结果会被评估复用 */
+function searchMoves(state: GameState): Move[] {
+  const moves = sideMoves(state, state.turn).moves
+  const extra = state.extraMoves[0]
+  if (!extra) return moves
+  return moves.filter((m) => (!extra.pieceId || m.pieceId === extra.pieceId) && (!extra.noCapture || !m.captureId))
+}
+
+/** 走法目标格上的棋子（吃子时为被吃的子） */
+const targetOf = (state: GameState, m: Move) => analysis(state).grid[m.to.y][m.to.x]!
+const moverOf = (state: GameState, m: Move) => analysis(state).grid[m.from.y][m.from.x]!
 
 // ───────────── 搜索 ─────────────
 
@@ -241,7 +298,7 @@ class Searcher {
       if (entry.flag === 'upper' && entry.score <= alpha) return entry.score
     }
 
-    const moves = this.order(state, legalMoves(state), entry?.best, ply)
+    const moves = this.order(state, searchMoves(state), entry?.best, ply)
     if (moves.length === 0) return -WIN + ply
 
     const alpha0 = alpha
@@ -279,7 +336,7 @@ class Searcher {
     // 放进静态搜索会一路连锁展开，留给正常搜索处理
     const captures = orderCaptures(
       state,
-      legalMoves(state).filter((m) => m.captureId && !isProtected(state, state.pieces.find((p) => p.id === m.captureId)!)),
+      searchMoves(state).filter((m) => m.captureId && !isProtected(state, targetOf(state, m))),
     )
     let best = standPat
     for (const m of captures) {
@@ -321,7 +378,7 @@ class Searcher {
 function search(state: GameState, p: SearchParams): Move {
   const s = new Searcher(p)
   const me = state.turn
-  let rootMoves = s.order(state, legalMoves(state), undefined, 0)
+  let rootMoves = s.order(state, searchMoves(state), undefined, 0)
   let best = rootMoves[0]
   // 有随机扰动时，需要每个根走法的准确分数，所以不在根节点剪枝
   const fullWindow = p.noise > 0
@@ -354,12 +411,12 @@ const moveKey = (m: Move) => `${m.pieceId}>${m.to.x}${m.to.y}`
 const ttKey = (s: GameState) => `${positionKey(s)}|${s.extraMoves.length}`
 
 function captureValue(state: GameState, m: Move): number {
-  const t = state.pieces.find((p) => p.id === m.captureId)!
+  const t = targetOf(state, m)
   return t.type === 'K' ? 100 : VALUE[t.type]
 }
 
 function attackerValue(state: GameState, m: Move): number {
-  return VALUE[state.pieces.find((p) => p.id === m.pieceId)!.type]
+  return VALUE[moverOf(state, m).type]
 }
 
 function orderCaptures(state: GameState, moves: Move[]): Move[] {
@@ -445,6 +502,20 @@ function positional(type: PieceType, side: Side, x: number, y: number): number {
   }
 }
 
+/** 开局出子评分的衰减：第 1 回合为 1，第 13 回合起为 0 */
+const DEVELOPMENT_DECAY = Array.from({ length: 14 }, (_, r) => Math.max(0, 1 - (r - 1) / 12))
+
+const EVALUATORS: Record<1 | 2 | 3, EvalFn> = {
+  1: evaluate,
+  2: (s, side, w) => evaluateV2(s, side, w),
+  3: (s, side, w) => evaluateV2(s, side, w, true, true),
+}
+
+// evaluateV2 复用的临时数组（按格子编号索引）
+const ATTACK = { red: new Uint8Array(90), black: new Uint8Array(90) }
+const CHEAPEST = { red: new Float64Array(90), black: new Float64Array(90) }
+const MOBILITY_COUNT = new Uint8Array(90)
+
 /** 灵活性：每个可走的格子值多少分 */
 const MOBILITY: Partial<Record<PieceType, number>> = { R: 0.025, N: 0.06, C: 0.02 }
 
@@ -453,14 +524,13 @@ const MOBILITY: Partial<Record<PieceType, number>> = { R: 0.025, N: 0.06, C: 0.0
  * 双方走法各生成一次，从中得到灵活性、攻击范围和保护关系。
  * 所有走法都来自规则引擎，所以锦囊带来的变化（比如车能斜走）会自动反映在评分里。
  */
-export function evaluateV2(state: GameState, side: Side, w: Weights = NEUTRAL): number {
-  const byId = new Map(state.pieces.map((p) => [p.id, p]))
+export function evaluateV2(state: GameState, side: Side, w: Weights = NEUTRAL, _hanging = true, development = false): number {
   const sides: Side[] = ['red', 'black']
-  const defends = { red: new Set<string>(), black: new Set<string>() }
-  const moves = {
-    red: generateMoves(state, 'red', getMods(state, 'red'), defends.red),
-    black: generateMoves(state, 'black', getMods(state, 'black'), defends.black),
-  }
+  const red = sideMoves(state, 'red')
+  const black = sideMoves(state, 'black')
+  const grid = analysis(state).grid
+  const defends = { red: red.defends, black: black.defends }
+  const moves = { red: red.moves, black: black.moves }
 
   // 轮到走的一方能直接吃掉对方将帅：胜负已定
   if (state.phase === 'play') {
@@ -470,23 +540,27 @@ export function evaluateV2(state: GameState, side: Side, w: Weights = NEUTRAL): 
     }
   }
 
-  // 每一方能攻击到的空格、对每个敌子的最便宜攻击者、每个子的可走步数
-  const sq = (x: number, y: number) => y * 9 + x
-  const attackSquares = { red: new Set<number>(), black: new Set<number>() }
-  const cheapest = { red: new Map<string, number>(), black: new Map<string, number>() }
-  const mobility = new Map<string, number>()
+  // 每一方能攻击到的空格、对每个格子上敌子的最便宜攻击者、每个子的可走步数。
+  // 用按格子编号（y * 9 + x）索引的定长数组，复用预先分配的内存
+  ATTACK.red.fill(0)
+  ATTACK.black.fill(0)
+  CHEAPEST.red.fill(Infinity)
+  CHEAPEST.black.fill(Infinity)
+  MOBILITY_COUNT.fill(0)
   for (const s of sides) {
+    const attack = ATTACK[s]
+    const cheapest = CHEAPEST[s]
     for (const m of moves[s]) {
       if (m.swapId) continue
-      const a = byId.get(m.pieceId)!
-      mobility.set(a.id, (mobility.get(a.id) ?? 0) + 1)
+      const a = grid[m.from.y][m.from.x]!
+      MOBILITY_COUNT[m.from.y * 9 + m.from.x]++
+      const to = m.to.y * 9 + m.to.x
       if (m.captureId) {
         const av = a.type === 'K' ? 100 : VALUE[a.type]
-        const prev = cheapest[s].get(m.captureId)
-        if (prev === undefined || av < prev) cheapest[s].set(m.captureId, av)
+        if (av < cheapest[to]) cheapest[to] = av
       } else if (a.type !== 'C') {
         // 炮平移到的格子并不受它攻击
-        attackSquares[s].add(sq(m.to.x, m.to.y))
+        attack[to] = 1
       }
     }
   }
@@ -498,12 +572,18 @@ export function evaluateV2(state: GameState, side: Side, w: Weights = NEUTRAL): 
     const enemy = other(p.side)
     const val = p.type === 'P' && crossedRiver(p.side, p.y) ? 2 : VALUE[p.type]
     let v = val + positional(p.type, p.side, p.x, p.y)
-    v += (mobility.get(p.id) ?? 0) * (MOBILITY[p.type] ?? 0)
+    // 开局出子：车马还在开局原位时扣分，随回合数逐渐减弱，第 13 回合起归零
+    if (development && (p.type === 'R' || p.type === 'N') && p.x === p.home.x && p.y === p.home.y) {
+      v -= 0.4 * DEVELOPMENT_DECAY[Math.min(roundOf(state), 13)]
+    }
+    const at = p.y * 9 + p.x
+    v += MOBILITY_COUNT[at] * (MOBILITY[p.type] ?? 0)
     v += Math.min(p.shield, 2) * (p.type === 'K' ? 3 : Math.min(VALUE[p.type], 4) * 0.5) * w.defense
     if (p.type === 'A' || p.type === 'B') v += 0.3 * w.defense
 
     if (p.type !== 'K') {
-      const attacker = isProtected(state, p) ? undefined : cheapest[enemy].get(p.id)
+      const c = CHEAPEST[enemy][at]
+      const attacker = c === Infinity || isProtected(state, p) ? undefined : c
       const defended = defends[p.side].has(p.id)
       const myMove = state.turn === p.side
       if (attacker !== undefined) {
@@ -525,7 +605,7 @@ export function evaluateV2(state: GameState, side: Side, w: Weights = NEUTRAL): 
     let escapes = 0
     for (const m of moves[s]) {
       if (m.pieceId !== king.id || m.swapId) continue
-      const unsafe = m.captureId ? defends[enemy].has(m.captureId) : attackSquares[enemy].has(sq(m.to.x, m.to.y))
+      const unsafe = m.captureId ? defends[enemy].has(m.captureId) : ATTACK[enemy][m.to.y * 9 + m.to.x] === 1
       if (!unsafe) escapes++
     }
     let danger = escapes === 0 ? 0.5 : escapes === 1 ? 0.2 : 0
