@@ -51,21 +51,41 @@ function genPiece(p: Piece, grid: Grid, mods: RuleMods, out: Move[]) {
 
   switch (p.type) {
     case 'K': {
-      for (const [dx, dy] of ORTHO) {
+      const kingOk = (nx: number, ny: number) =>
+        mods.kingLeavePalace ? !crossedRiver(side, ny) : inPalace(side, nx, ny)
+      const dirs = mods.kingDiagonal ? [...ORTHO, ...DIAG] : ORTHO
+      for (const [dx, dy] of dirs) {
         const nx = p.x + dx
         const ny = p.y + dy
-        if (!inBounds(nx, ny)) continue
-        const ok = mods.kingLeavePalace ? !crossedRiver(side, ny) : inPalace(side, nx, ny)
-        if (ok) push(nx, ny)
+        if (!inBounds(nx, ny) || !kingOk(nx, ny)) continue
+        const t = grid[ny][nx]
+        if (t && t.side === side) {
+          // 移形换影：与相邻的己方棋子换位（只限上下左右）
+          if (mods.kingSwap && (dx === 0 || dy === 0)) {
+            out.push({ pieceId: p.id, from: { x: p.x, y: p.y }, to: { x: nx, y: ny }, swapId: t.id })
+          }
+          continue
+        }
+        push(nx, ny)
+        // 御驾亲征：在己方半场内像车一样直线行走
+        if (t || !mods.kingLeavePalace || (dx !== 0 && dy !== 0)) continue
+        // 最多再走一格（共两格）
+        const x2 = nx + dx
+        const y2 = ny + dy
+        if (inBounds(x2, y2) && kingOk(x2, y2)) push(x2, y2)
       }
-      // 飞将：同一直线上中间无子时可直接吃掉对方将帅
+      // 飞将：同一直线上中间无子（隔山飞将：可隔一子）时可直接吃掉对方将帅
       const dy = forward(side)
+      let screens = 0
       for (let y = p.y + dy; inBounds(p.x, y); y += dy) {
         const t = grid[y][p.x]
-        if (t) {
-          if (t.type === 'K' && t.side !== side) push(p.x, y)
+        if (!t) continue
+        if (t.type === 'K' && t.side !== side) {
+          push(p.x, y)
           break
         }
+        screens++
+        if (screens > (mods.kingFlyThroughOne ? 1 : 0)) break
       }
       break
     }
@@ -84,7 +104,7 @@ function genPiece(p: Piece, grid: Grid, mods: RuleMods, out: Move[]) {
         const nx = p.x + dx * 2
         const ny = p.y + dy * 2
         if (!inBounds(nx, ny)) continue
-        if (occupied(p.x + dx, p.y + dy)) continue // 塞象眼
+        if (!mods.elephantNoEye && occupied(p.x + dx, p.y + dy)) continue // 塞象眼
         if (!mods.elephantCrossRiver && crossedRiver(side, ny)) continue
         push(nx, ny)
       }
@@ -102,14 +122,30 @@ function genPiece(p: Piece, grid: Grid, mods: RuleMods, out: Move[]) {
         }
         push(nx, ny)
       }
+      // 龙马精神：马也能走田字（会被塞象眼，不受河界限制）
+      if (mods.horseElephantStep) {
+        for (const [dx, dy] of DIAG) push(p.x + dx * 2, p.y + dy * 2)
+      }
       break
     }
     case 'R': {
       const dirs = mods.rookDiagonal ? [...ORTHO, ...DIAG] : ORTHO
       for (const [dx, dy] of dirs) {
-        for (let x = p.x + dx, y = p.y + dy; inBounds(x, y); x += dx, y += dy) {
-          push(x, y)
-          if (grid[y][x]) break
+        let jumped = false
+        // 纵横天下：斜走最多两格
+        const maxSteps = dx !== 0 && dy !== 0 ? 2 : Infinity
+        let steps = 0
+        const diagonal = dx !== 0 && dy !== 0
+        for (let x = p.x + dx, y = p.y + dy; inBounds(x, y) && steps < maxSteps; x += dx, y += dy, steps++) {
+          const t = grid[y][x]
+          // 纵横天下：斜走只有紧挨着的一格可以吃子
+          if (!(diagonal && t && steps > 0)) push(x, y)
+          if (!t) continue
+          // 畅通无阻：穿过己方棋子
+          if (mods.rookPassFriendly && t.side === side && !diagonal) continue
+          // 瞒天过海：可以越过第一个棋子继续前进
+          if (!mods.rookJump || jumped) break
+          jumped = true
         }
       }
       break
@@ -139,7 +175,11 @@ function genPiece(p: Piece, grid: Grid, mods: RuleMods, out: Move[]) {
         push(p.x - 1, p.y)
         push(p.x + 1, p.y)
       }
-      if (crossed && mods.pawnRetreat) push(p.x, p.y - f)
+      if (mods.pawnRetreat) push(p.x, p.y - f)
+      if (crossed && mods.pawnDiagonalForward) {
+        push(p.x - 1, p.y + f)
+        push(p.x + 1, p.y + f)
+      }
       break
     }
   }

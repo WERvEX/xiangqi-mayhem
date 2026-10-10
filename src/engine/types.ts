@@ -30,6 +30,8 @@ export interface Move {
   from: Pos
   to: Pos
   captureId?: string
+  /** 与己方棋子交换位置（移形换影） */
+  swapId?: string
 }
 
 /** 锦囊对走法规则的修改，可叠加 */
@@ -40,9 +42,23 @@ export interface RuleMods {
   kingLeavePalace?: boolean
   pawnSidewaysEarly?: boolean
   pawnRetreat?: boolean
+  /** 过河兵卒可以斜向前进 */
+  pawnDiagonalForward?: boolean
   /** 炮吃子时允许的最多炮架数，默认 1 */
   cannonMaxScreens?: number
   rookDiagonal?: boolean
+  elephantNoEye?: boolean
+  kingDiagonal?: boolean
+  /** 飞将时中间可以隔一个子 */
+  kingFlyThroughOne?: boolean
+  /** 马也能走象步 */
+  horseElephantStep?: boolean
+  /** 车可以越过一个棋子 */
+  rookJump?: boolean
+  /** 车可以穿过己方棋子 */
+  rookPassFriendly?: boolean
+  /** 将帅可与相邻己方棋子换位 */
+  kingSwap?: boolean
 }
 
 export interface OwnedAugment {
@@ -77,10 +93,24 @@ export interface ExtraMove {
 
 export type Phase = 'draft' | 'play' | 'over'
 
+export type FxKind =
+  | 'capture'
+  | 'shield'
+  | 'protect'
+  | 'revive'
+  | 'promote'
+  | 'burn'
+  | 'summon'
+  | 'convert'
+  | 'swap'
+  | 'extra'
+
 export interface LogEntry {
   round: number
   side?: Side
   text: string
+  /** 界面特效：在棋盘某个位置播放 */
+  fx?: { kind: FxKind; pos: Pos }
 }
 
 export interface GameState {

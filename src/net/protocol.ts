@@ -1,7 +1,7 @@
 import type { Action, Side } from '../engine'
 
 /** 规则或协议有不兼容改动时加一，双方版本不一致会拒绝连接 */
-export const PROTOCOL_VERSION = 1
+export const PROTOCOL_VERSION = 2
 
 export type NetMessage =
   /** 客人 → 房主：加入或重连 */

@@ -13,6 +13,7 @@ import {
   type Piece,
   type PieceType,
   type Side,
+  CONFIG,
 } from './index'
 
 /** 跳过开局锦囊，直接进入走棋 */
@@ -131,6 +132,7 @@ describe('标准规则', () => {
       ['red', 'R', 0, 9],
       ['black', 'R', 8, 0],
     ])
+    s.draftsDone = CONFIG.draftRounds.length // 不再发放锦囊，避免打断走子序列
     const cycle: [[number, number], [number, number]][] = [
       [[0, 9], [0, 8]],
       [[8, 0], [8, 1]],
@@ -180,7 +182,24 @@ describe('锦囊', () => {
 
   it('士出九宫 / 御驾亲征', () => {
     expect(targets(position([['red', 'A', 3, 7]], { red: ['chugong'] }), 3, 7)).toContain('2,6')
-    expect(targets(position([['red', 'K', 3, 7]], { red: ['yujia'] }), 3, 7)).toContain('2,7')
+    const king = targets(position([['red', 'K', 3, 7]], { red: ['yujia'] }), 3, 7)
+    expect(king).toEqual(expect.arrayContaining(['2,7', '1,7', '3,5']))
+    expect(king).not.toContain('0,7')
+    expect(king).not.toContain('3,4')
+  })
+
+  it('回头是岸：兵卒可后退，过河后可斜进', () => {
+    const t = targets(position([['red', 'P', 2, 4]], { red: ['huitou'] }), 2, 4)
+    expect(t).toEqual(expect.arrayContaining(['2,5', '1,3', '3,3']))
+  })
+
+  it('黄袍加身：选中时最靠前的兵卒变车', () => {
+    let s = createGame('hp')
+    s.draft!.sides.red.options = ['huangpao']
+    s = applyAction(s, { type: 'pick', side: 'red', augmentId: 'huangpao' })
+    const promoted = s.pieces.filter((p) => p.side === 'red' && p.promoted)
+    expect(promoted).toHaveLength(2)
+    expect(promoted.map((p) => p.x)).toContain(4)
   })
 
   it('连珠炮：隔两子吃', () => {
@@ -196,9 +215,10 @@ describe('锦囊', () => {
     expect(targets(s, 1, 7)).toContain('1,0')
   })
 
-  it('纵横天下：车可斜走', () => {
+  it('纵横天下：车可斜走两格', () => {
     const s = position([['red', 'R', 0, 9]], { red: ['zongheng'] })
-    expect(targets(s, 0, 9)).toContain('5,4')
+    expect(targets(s, 0, 9)).toContain('2,7')
+    expect(targets(s, 0, 9)).not.toContain('3,6')
   })
 
   it('护盾挡下吃子，攻击者原地不动', () => {
@@ -239,7 +259,7 @@ describe('锦囊', () => {
     expect(s.turn).toBe('black')
   })
 
-  it('兵贵神速：每 3 回合额外一步', () => {
+  it('兵贵神速：每 2 回合额外一步', () => {
     let s = position(
       [
         ['red', 'R', 0, 9],
@@ -247,22 +267,10 @@ describe('锦囊', () => {
       ],
       { red: ['shensu'] },
     )
-    const steps: [number, number][] = [
-      [0, 8],
-      [0, 7],
-      [0, 6],
-    ]
-    let from: [number, number] = [0, 9]
-    let bFrom: [number, number] = [8, 0]
-    for (const to of steps) {
-      s = move(s, from, to)
-      from = to
-      if (s.turn === 'black') {
-        const bTo: [number, number] = [8, bFrom[1] + 1]
-        s = move(s, bFrom, bTo)
-        bFrom = bTo
-      }
-    }
+    s = move(s, [0, 9], [0, 8])
+    s = move(s, [8, 0], [8, 1])
+    expect(s.extraMoves).toHaveLength(0)
+    s = move(s, [0, 8], [0, 7])
     expect(s.turn).toBe('red')
     expect(s.extraMoves).toHaveLength(1)
   })
@@ -318,16 +326,204 @@ describe('锦囊发放', () => {
     expect(() => applyAction(after, { type: 'reroll', side: 'red' })).toThrow()
   })
 
-  it('第 10 回合再次发放', () => {
+  it('第二次发放在配置的回合开始', () => {
+    const round = CONFIG.draftRounds[1]
     let s = position([
       ['red', 'R', 0, 9],
       ['black', 'R', 8, 0],
     ])
-    s.turnNo = 17
-    s.turn = 'black'
-    s = move(s, [8, 0], [8, 1])
+    // 第二次发放在黑方走棋前
+    s.turnNo = (round - 1) * 2
+    s.turn = 'red'
+    s = move(s, [0, 9], [0, 8])
     expect(s.phase).toBe('draft')
-    expect(s.draft!.round).toBe(10)
+    expect(s.turn).toBe('black')
+    expect(s.draft!.round).toBe(round)
+  })
+
+  it('粮草先行：刷新 +2，下一次锦囊升一档', () => {
+    let s = position([
+      ['red', 'R', 0, 9],
+      ['black', 'R', 8, 0],
+    ])
+    s.augments.red = [{ id: 'liangcao', data: {} }]
+    s.augments.red[0].data.boost = 1
+    s.turnNo = (CONFIG.draftRounds[1] - 1) * 2
+    s.turn = 'red'
+    s = move(s, [0, 9], [0, 8])
+    const tiers = ['silver', 'gold', 'prism']
+    expect(tiers.indexOf(s.draft!.sides.red.tier)).toBe(
+      Math.min(tiers.indexOf(s.draft!.sides.black.tier) + 1, 2),
+    )
+    expect(s.augments.red[0].data.boost).toBe(0)
+  })
+})
+
+describe('新锦囊', () => {
+  it('飞象过河：象不被塞眼', () => {
+    const s = position(
+      [
+        ['red', 'B', 2, 9],
+        ['red', 'P', 3, 8],
+      ],
+      { red: ['feixiang'] },
+    )
+    expect(targets(s, 2, 9)).toContain('4,7')
+  })
+
+  it('畅通无阻：车穿过己方棋子', () => {
+    const s = position(
+      [
+        ['red', 'R', 0, 9],
+        ['red', 'P', 0, 6],
+        ['black', 'N', 0, 2],
+      ],
+      { red: ['changtong'] },
+    )
+    const t = targets(s, 0, 9)
+    expect(t).toContain('0,4')
+    expect(t).toContain('0,2')
+    expect(t).not.toContain('0,6')
+  })
+
+  it('纵横天下：斜走只能吃紧挨着的子', () => {
+    const near = position(
+      [
+        ['red', 'R', 0, 9],
+        ['black', 'N', 1, 8],
+      ],
+      { red: ['zongheng'] },
+    )
+    expect(targets(near, 0, 9)).toContain('1,8')
+    const far = position(
+      [
+        ['red', 'R', 0, 9],
+        ['black', 'N', 2, 7],
+      ],
+      { red: ['zongheng'] },
+    )
+    expect(targets(far, 0, 9)).not.toContain('2,7')
+  })
+
+  it('暗度陈仓：将可斜走但不出九宫', () => {
+    const s = position([['red', 'K', 4, 8]], { red: ['xiexing'] })
+    expect(targets(s, 4, 8)).toEqual(expect.arrayContaining(['3,7', '5,7', '3,9', '5,9']))
+    const corner = position([['red', 'K', 3, 7]], { red: ['xiexing'] })
+    expect(targets(corner, 3, 7)).not.toContain('2,6')
+  })
+
+  it('隔山飞将：隔一子也能飞将', () => {
+    const s = position(
+      [
+        ['black', 'K', 4, 0],
+        ['black', 'A', 4, 1],
+      ],
+      { red: ['geshan'] },
+    )
+    expect(targets(s, 4, 9)).toContain('4,0')
+    const plain = position([
+      ['black', 'K', 4, 0],
+      ['black', 'A', 4, 1],
+    ])
+    expect(targets(plain, 4, 9)).not.toContain('4,0')
+  })
+
+  it('移形换影：将与相邻己方棋子换位', () => {
+    let s = position([['red', 'A', 4, 8]], { red: ['yixing'] })
+    const swap = legalMoves(s).find((m) => m.swapId)!
+    expect(swap.to).toEqual({ x: 4, y: 8 })
+    s = applyAction(s, { type: 'move', side: 'red', pieceId: swap.pieceId, to: swap.to })
+    const king = s.pieces.find((p) => p.side === 'red' && p.type === 'K')!
+    const adv = s.pieces.find((p) => p.type === 'A')!
+    expect([king.x, king.y, adv.x, adv.y]).toEqual([4, 8, 4, 9])
+  })
+
+  it('龙马精神：马能走田字', () => {
+    const s = position([['red', 'N', 4, 5]], { red: ['longma'] })
+    expect(targets(s, 4, 5)).toEqual(expect.arrayContaining(['2,3', '6,3', '2,7', '6,7']))
+  })
+
+  it('瞒天过海：车越过一子吃后面的子', () => {
+    const s = position(
+      [
+        ['red', 'R', 0, 9],
+        ['red', 'P', 0, 6],
+        ['black', 'N', 0, 2],
+      ],
+      { red: ['mantian'] },
+    )
+    const t = targets(s, 0, 9)
+    expect(t).toContain('0,4')
+    expect(t).toContain('0,2')
+    expect(t).not.toContain('0,1')
+  })
+
+  it('金蝉脱壳：士代替将被吃', () => {
+    let s = position(
+      [
+        ['red', 'R', 3, 5],
+        ['black', 'A', 4, 1],
+      ],
+      { black: ['jinchan'] },
+    )
+    expect(canAttackKing(s, 'red')).toBe(false)
+    s = move(s, [3, 5], [3, 0])
+    expect(s.phase).toBe('play')
+    expect(s.pieces.find((p) => p.type === 'A')!.alive).toBe(false)
+    expect(s.pieces.find((p) => p.side === 'black' && p.type === 'K')!.alive).toBe(true)
+  })
+
+  it('空城计：将周围没有己方棋子时不会被吃', () => {
+    let s = position([['red', 'R', 3, 5]], { black: ['kongcheng'] })
+    s = move(s, [3, 5], [3, 0])
+    expect(s.phase).toBe('play')
+    let guarded = position(
+      [
+        ['red', 'R', 3, 5],
+        ['black', 'A', 4, 1],
+      ],
+      { black: ['kongcheng'] },
+    )
+    guarded = move(guarded, [3, 5], [3, 0])
+    expect(guarded.winner).toBe('red')
+  })
+
+  it('火烧连营：炮吃子后烧掉相邻敌方兵卒', () => {
+    let s = position(
+      [
+        ['red', 'C', 4, 9],
+        ['red', 'P', 4, 6],
+        ['black', 'R', 4, 3],
+        ['black', 'P', 3, 3],
+        ['black', 'P', 5, 3],
+        ['black', 'P', 4, 2],
+      ],
+      { red: ['huoshao'] },
+    )
+    s.pieces.find((p) => p.side === 'black' && p.type === 'P' && p.x === 5)!.shield = 1
+    s = move(s, [4, 9], [4, 3])
+    const pawns = s.pieces.filter((p) => p.side === 'black' && p.type === 'P')
+    expect(pawns.filter((p) => p.alive).map((p) => p.x)).toEqual([5])
+    expect(pawns.find((p) => p.x === 5)!.shield).toBe(0)
+  })
+
+  it('反间计：策反一个未过河的敌方兵卒', () => {
+    let s = createGame('fj')
+    s.draft!.sides.red.options = ['fanjian']
+    s = applyAction(s, { type: 'pick', side: 'red', augmentId: 'fanjian' })
+    expect(s.pieces.filter((p) => p.alive && p.type === 'P' && p.side === 'red')).toHaveLength(7)
+    expect(s.pieces.filter((p) => p.alive && p.type === 'P' && p.side === 'black')).toHaveLength(3)
+  })
+
+  it('天降神兵 / 众志成城 / 御林军', () => {
+    let s = createGame('tj')
+    s.draft!.sides.red.options = ['tianjiang']
+    s.draft!.sides.black.options = ['zhongzhi']
+    s = applyAction(s, { type: 'pick', side: 'red', augmentId: 'tianjiang' })
+    s = applyAction(s, { type: 'pick', side: 'black', augmentId: 'zhongzhi' })
+    // 开局底线已满，就近放在己方半场
+    expect(s.pieces.filter((p) => p.alive && p.side === 'red' && p.type === 'R')).toHaveLength(3)
+    expect(s.pieces.filter((p) => p.side === 'black' && p.type === 'P').every((p) => p.shield === 2)).toBe(true)
   })
 })
 

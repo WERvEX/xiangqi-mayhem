@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   AUGMENTS,
-  canAttackKing,
+  kingThreat,
   exposesKing,
   findKing,
   legalMoves,
@@ -10,15 +10,17 @@ import {
   other,
   pieceAt,
   roundOf,
+  PIECE_CHARS,
   SIDE_NAMES,
   TIER_NAMES,
   type Action,
   type GameState,
   type Move,
+  type Piece,
   type Pos,
   type Side,
 } from '../engine'
-import { Board } from './Board'
+import { Board, type FxItem } from './Board'
 import { AugmentCard, AugmentChip, AugmentGlyph, Modal, Rules } from './common'
 
 const SIDES: Side[] = ['red', 'black']
@@ -58,7 +60,10 @@ export function GameView({
   const [infoId, setInfoId] = useState<string | null>(null)
   const [showRules, setShowRules] = useState(false)
 
-  // 局面变化（包括对方的操作、悔棋）时清掉临时的界面状态
+  const [fx, setFx] = useState<FxItem[]>([])
+  const [ghosts, setGhosts] = useState<Piece[]>([])
+
+  // 局面变化（包括对方的操作、悔棋）时清掉临时的界面状态，并播放这一步产生的特效
   const [prevState, setPrevState] = useState(state)
   if (state !== prevState) {
     setPrevState(state)
@@ -66,6 +71,13 @@ export function GameView({
     setPendingMove(null)
     setDraftHidden(false)
     if (state.phase !== 'over') setOverDismissed(false)
+    const forward = state.log.length > prevState.log.length
+    const fresh = forward ? state.log.slice(prevState.log.length) : []
+    setFx(
+      fresh.flatMap((e, i) => (e.fx ? [{ key: `${state.log.length}-${i}`, kind: e.fx.kind, pos: e.fx.pos }] : [])),
+    )
+    const wasAlive = new Map(prevState.pieces.filter((p) => p.alive).map((p) => [p.id, p]))
+    setGhosts(forward ? state.pieces.filter((p) => !p.alive && wasAlive.has(p.id)).map((p) => wasAlive.get(p.id)!) : [])
   }
 
   const canAct = (side: Side) => mySide === null || mySide === side
@@ -77,9 +89,18 @@ export function GameView({
   const activeId = myTurn ? (extra?.pieceId ?? selectedId) : null
   const targets = activeId ? moves.filter((m) => m.pieceId === activeId) : []
 
-  const dangerKingIds = useMemo(() => {
-    if (state.phase === 'over') return []
-    return SIDES.filter((side) => canAttackKing(state, other(side))).map((side) => findKing(state, side)!.id)
+  // 红圈：将帅可被直接吃掉；黄圈：会被攻击，但有护盾或锦囊挡下（仍会付出代价）
+  const { dangerKingIds, guardedKingIds } = useMemo(() => {
+    const danger: string[] = []
+    const guarded: string[] = []
+    if (state.phase !== 'over') {
+      for (const side of SIDES) {
+        const threat = kingThreat(state, other(side))
+        if (threat === 'lethal') danger.push(findKing(state, side)!.id)
+        else if (threat === 'guarded') guarded.push(findKing(state, side)!.id)
+      }
+    }
+    return { dangerKingIds: danger, guardedKingIds: guarded }
   }, [state])
 
   const doMove = (m: Move) => dispatch({ type: 'move', side: state.turn, pieceId: m.pieceId, to: m.to })
@@ -152,6 +173,9 @@ export function GameView({
           selectedId={activeId}
           targets={targets}
           dangerKingIds={dangerKingIds}
+          guardedKingIds={guardedKingIds}
+          ghosts={ghosts}
+          fx={fx}
           onClickPoint={onClickPoint}
         />
       </div>
@@ -298,6 +322,11 @@ function PlayerPanel({
 }) {
   const active = state.phase !== 'over' && state.turn === side
   const diff = material(state, side) - material(state, other(side))
+  // 这一方吃掉的对方棋子（按价值排序）
+  const order = 'RCNBAPK'
+  const captured = state.pieces
+    .filter((p) => !p.alive && p.side !== side)
+    .sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type))
   return (
     <div className={`player-panel ${side} ${active ? 'active' : ''}`}>
       <div className="player-head">
@@ -308,6 +337,15 @@ function PlayerPanel({
           <span className={`material ${diff > 0 ? 'up' : 'down'}`} title="子力差">
             {diff > 0 ? '+' : ''}
             {diff}
+          </span>
+        )}
+        {captured.length > 0 && (
+          <span className="captured" title="已吃掉的棋子">
+            {captured.map((p) => (
+              <span key={p.id} className={`cap ${p.side}`}>
+                {PIECE_CHARS[p.side][p.type]}
+              </span>
+            ))}
           </span>
         )}
         <span className="rerolls" title="剩余刷新次数">
@@ -349,9 +387,9 @@ function DraftModal({
         第 {state.draft!.round} 回合 · <span className={`tier-label tier-${ds.tier}`}>{TIER_NAMES[ds.tier]}</span>
         {ds.comeback && <span className="comeback"> · 逆风补偿：品质提升</span>}
       </p>
-      <div className="aug-cards">
-        {ds.options.map((id) => (
-          <AugmentCard key={id} id={id} onClick={() => onPick(id)} />
+      <div className="aug-cards" key={ds.rerollNo}>
+        {ds.options.map((id, i) => (
+          <AugmentCard key={id} id={id} onClick={() => onPick(id)} delay={i * 90} />
         ))}
       </div>
       {opponent.length > 0 && (

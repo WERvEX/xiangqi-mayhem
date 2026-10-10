@@ -24,10 +24,16 @@ export function AugmentGlyph({ id, size = 'md' }: { id: string; size?: 'sm' | 'm
   return <span className={`glyph glyph-${size} tier-${def.tier}`}>{def.glyph}</span>
 }
 
-export function AugmentCard({ id, onClick }: { id: string; onClick?: () => void }) {
+export function AugmentCard({ id, onClick, delay }: { id: string; onClick?: () => void; delay?: number }) {
   const def = AUGMENTS[id]
   return (
-    <button type="button" className={`aug-card tier-${def.tier}`} onClick={onClick} disabled={!onClick}>
+    <button
+      type="button"
+      className={`aug-card tier-${def.tier}${delay !== undefined ? ' deal' : ''}`}
+      style={delay !== undefined ? { animationDelay: `${delay}ms` } : undefined}
+      onClick={onClick}
+      disabled={!onClick}
+    >
       <AugmentGlyph id={id} size="lg" />
       <div className="aug-card-name">{def.name}</div>
       <div className={`tier-label tier-${def.tier}`}>{TIER_NAMES[def.tier]}</div>
@@ -78,11 +84,11 @@ export function Rules() {
     <ul className="rules">
       <li>棋子走法与中国象棋相同。</li>
       <li>
-        <b>吃掉对方的将（帅）即获胜</b>。允许送将，界面会高亮受威胁的将帅，并在你送将前提醒。
+        <b>吃掉对方的将（帅）即获胜</b>。允许送将：红圈表示将帅能被直接吃掉，黄圈表示会被攻击但有保护；送将前会提醒。
       </li>
       <li>将帅在同一直线上且中间无子时，可以"飞将"直接吃掉对方。</li>
       <li>
-        第 {first}、{rest.join('、')} 回合开始时，双方各自从 3 个锦囊中选 1 个，锦囊对双方公开。每局可刷新{' '}
+        第 {first}、{rest.join('、')} 回合，双方各自从 3 个锦囊中选 1 个（轮流在红方、黑方走棋前发放），锦囊对双方公开。每局可刷新{' '}
         {CONFIG.rerollsPerGame} 次选项。
       </li>
       <li>锦囊分白银、黄金、棱彩三档，越往后品质越高；子力落后较多的一方，选项会提升一档。</li>

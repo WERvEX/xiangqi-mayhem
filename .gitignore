@@ -25,3 +25,6 @@ dist-ssr
 
 # Claude Code 本地配置
 .claude/
+
+# 模拟输出
+.sim/

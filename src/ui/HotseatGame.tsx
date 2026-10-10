@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { applyAction, createGame, randomSeed, type Action, type GameState } from '../engine'
 import { GameView } from './GameView'
 
@@ -15,6 +15,11 @@ export function HotseatGame({ onExit }: { onExit: () => void }) {
       console.warn(e)
     }
   }
+
+  // 开发模式下暴露给控制台，便于调试和测试（生产构建会移除）
+  useEffect(() => {
+    if (import.meta.env.DEV) Object.assign(window, { __xq: { state, dispatch } })
+  })
 
   return (
     <GameView

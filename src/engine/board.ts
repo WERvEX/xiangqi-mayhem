@@ -1,4 +1,4 @@
-import type { GameState, Piece, PieceType, Side } from './types'
+import type { FxKind, GameState, Piece, PieceType, Pos, Side } from './types'
 
 export const COLS = 9
 export const ROWS = 10
@@ -81,6 +81,6 @@ export function roundOf(state: GameState): number {
   return Math.floor(state.turnNo / 2) + 1
 }
 
-export function addLog(state: GameState, text: string, side?: Side) {
-  state.log.push({ round: roundOf(state), side, text })
+export function addLog(state: GameState, text: string, side?: Side, fx?: { kind: FxKind; pos: Pos }) {
+  state.log.push({ round: roundOf(state), side, text, fx })
 }
