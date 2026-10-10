@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Codex, Modal, Rules } from './common'
 
-export function Home({ onStart }: { onStart: () => void }) {
+export function Home({ onHotseat, onOnline }: { onHotseat: () => void; onOnline: () => void }) {
   const [showCodex, setShowCodex] = useState(false)
   return (
     <div className="home">
@@ -12,11 +12,11 @@ export function Home({ onStart }: { onStart: () => void }) {
       <p className="tagline">中国象棋 × 锦囊三选一。每局都不一样的象棋。</p>
 
       <div className="home-actions">
-        <button type="button" className="primary big" onClick={onStart}>
+        <button type="button" className="primary big" onClick={onHotseat}>
           同屏对战
         </button>
-        <button type="button" className="big" disabled title="即将推出">
-          联机对战 <small>即将推出</small>
+        <button type="button" className="primary big" onClick={onOnline}>
+          联机对战
         </button>
         <button type="button" className="big" onClick={() => setShowCodex(true)}>
           锦囊图鉴

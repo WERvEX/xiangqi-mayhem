@@ -1,9 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import {
-  applyAction,
   AUGMENTS,
   canAttackKing,
-  createGame,
   exposesKing,
   findKing,
   legalMoves,
@@ -11,7 +9,6 @@ import {
   nextDraftRound,
   other,
   pieceAt,
-  randomSeed,
   roundOf,
   SIDE_NAMES,
   TIER_NAMES,
@@ -26,21 +23,58 @@ import { AugmentCard, AugmentChip, AugmentGlyph, Modal, Rules } from './common'
 
 const SIDES: Side[] = ['red', 'black']
 
-export function GameView({ onExit }: { onExit: () => void }) {
-  const [history, setHistory] = useState<GameState[]>(() => [createGame(randomSeed())])
-  const state = history[history.length - 1]
+export interface GameViewProps {
+  state: GameState
+  dispatch: (action: Action) => void
+  /** 联机时为自己执子的一方；同屏对战为 null，双方都由本机操作 */
+  mySide: Side | null
+  onExit: () => void
+  /** 只有同屏对战提供悔棋 */
+  onUndo?: () => void
+  onRestart: () => void
+  restartLabel?: string
+  restartDisabled?: boolean
+  /** 显示在顶部的提示条（联机状态等） */
+  banner?: ReactNode
+}
+
+/** 对局界面。新开一局时请用 key 重新挂载，以重置界面状态。 */
+export function GameView({
+  state,
+  dispatch,
+  mySide,
+  onExit,
+  onUndo,
+  onRestart,
+  restartLabel = '再来一局',
+  restartDisabled = false,
+  banner,
+}: GameViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [flipped, setFlipped] = useState(false)
+  const [flipped, setFlipped] = useState(mySide === 'black')
   const [pendingMove, setPendingMove] = useState<Move | null>(null)
   const [overDismissed, setOverDismissed] = useState(false)
   const [draftHidden, setDraftHidden] = useState(false)
   const [infoId, setInfoId] = useState<string | null>(null)
   const [showRules, setShowRules] = useState(false)
 
+  // 局面变化（包括对方的操作、悔棋）时清掉临时的界面状态
+  const [prevState, setPrevState] = useState(state)
+  if (state !== prevState) {
+    setPrevState(state)
+    setSelectedId(null)
+    setPendingMove(null)
+    setDraftHidden(false)
+    if (state.phase !== 'over') setOverDismissed(false)
+  }
+
+  const canAct = (side: Side) => mySide === null || mySide === side
+  const myTurn = state.phase === 'play' && canAct(state.turn)
+
   const moves = useMemo(() => legalMoves(state), [state])
   const extra = state.extraMoves[0]
   // 额外行动限定某个棋子时自动选中它
-  const activeId = extra?.pieceId ?? selectedId
+  const activeId = myTurn ? (extra?.pieceId ?? selectedId) : null
   const targets = activeId ? moves.filter((m) => m.pieceId === activeId) : []
 
   const dangerKingIds = useMemo(() => {
@@ -48,22 +82,10 @@ export function GameView({ onExit }: { onExit: () => void }) {
     return SIDES.filter((side) => canAttackKing(state, other(side))).map((side) => findKing(state, side)!.id)
   }, [state])
 
-  const dispatch = (action: Action) => {
-    try {
-      const next = applyAction(state, action)
-      setHistory((h) => [...h, next])
-      setSelectedId(null)
-      setDraftHidden(false)
-      setOverDismissed(false)
-    } catch (e) {
-      console.warn(e)
-    }
-  }
-
   const doMove = (m: Move) => dispatch({ type: 'move', side: state.turn, pieceId: m.pieceId, to: m.to })
 
   const onClickPoint = (pos: Pos) => {
-    if (state.phase !== 'play') return
+    if (!myTurn) return
     const t = targets.find((m) => m.to.x === pos.x && m.to.y === pos.y)
     if (t) {
       if (exposesKing(state, t)) setPendingMove(t)
@@ -77,31 +99,51 @@ export function GameView({ onExit }: { onExit: () => void }) {
     } else setSelectedId(null)
   }
 
-  const undo = () => {
-    if (history.length <= 1) return
-    setHistory((h) => h.slice(0, -1))
-    setSelectedId(null)
+  const draft = state.draft
+  let draftSide: Side | null = null
+  if (draft) {
+    if (mySide) draftSide = draft.sides[mySide].done ? null : mySide
+    else draftSide = SIDES.find((s) => !draft.sides[s].done) ?? null
   }
+  const waitingOpponentDraft = !!(draft && mySide && draft.sides[mySide].done)
 
-  const restart = () => {
-    setHistory([createGame(randomSeed())])
-    setSelectedId(null)
-  }
-
-  const draftSide: Side | null = state.draft
-    ? !state.draft.sides.red.done
-      ? 'red'
-      : !state.draft.sides.black.done
-        ? 'black'
-        : null
-    : null
-
+  const resignSide = mySide ?? state.turn
   const next = nextDraftRound(state)
   const topSide: Side = flipped ? 'red' : 'black'
 
+  let statusText: ReactNode
+  if (state.phase === 'over') {
+    statusText = `${state.winner ? `${SIDE_NAMES[state.winner]}胜` : '和棋'} · ${state.endReason}`
+  } else if (state.phase === 'draft') {
+    statusText = waitingOpponentDraft ? '等待对方选择锦囊…' : '选择锦囊中'
+  } else {
+    let who: ReactNode
+    if (!mySide) {
+      who = (
+        <>
+          <b className={`side-text ${state.turn}`}>{SIDE_NAMES[state.turn]}</b>走棋
+        </>
+      )
+    } else if (myTurn) who = <b className={`side-text ${state.turn}`}>轮到你走棋</b>
+    else who = '等待对方走棋…'
+    statusText = (
+      <>
+        {who} · 第 {roundOf(state)} 回合
+        {next !== null && ` · 下次锦囊：第 ${next} 回合`}
+      </>
+    )
+  }
+
+  let overTitle = '和棋'
+  if (state.winner) {
+    if (!mySide) overTitle = `${SIDE_NAMES[state.winner]}获胜！`
+    else overTitle = state.winner === mySide ? '你赢了！' : '你输了'
+  }
+
   return (
     <div className="game">
-      <PlayerPanel state={state} side={topSide} onInfo={setInfoId} />
+      {banner}
+      <PlayerPanel state={state} side={topSide} mySide={mySide} onInfo={setInfoId} />
 
       <div className="board-wrap">
         <Board
@@ -114,23 +156,13 @@ export function GameView({ onExit }: { onExit: () => void }) {
         />
       </div>
 
-      <PlayerPanel state={state} side={other(topSide)} onInfo={setInfoId} />
+      <PlayerPanel state={state} side={other(topSide)} mySide={mySide} onInfo={setInfoId} />
 
-      <div className={`status-bar ${state.turn}`}>
-        {state.phase === 'over' ? (
-          <span>
-            {state.winner ? `${SIDE_NAMES[state.winner]}胜` : '和棋'} · {state.endReason}
-          </span>
-        ) : (
-          <span>
-            <b className={`side-text ${state.turn}`}>{SIDE_NAMES[state.turn]}</b>
-            {state.phase === 'draft' ? '选择锦囊中' : '走棋'} · 第 {roundOf(state)} 回合
-            {state.phase === 'play' && next !== null && ` · 下次锦囊：第 ${next} 回合`}
-          </span>
-        )}
+      <div className="status-bar">
+        <span>{statusText}</span>
       </div>
 
-      {extra && state.phase === 'play' && (
+      {extra && myTurn && (
         <div className="extra-banner">
           <span>
             【{AUGMENTS[extra.source].name}】可以再走一步{extra.noCapture && '（不能吃子）'}
@@ -142,9 +174,11 @@ export function GameView({ onExit }: { onExit: () => void }) {
       )}
 
       <div className="controls">
-        <button type="button" onClick={undo} disabled={history.length <= 1}>
-          悔棋
-        </button>
+        {onUndo && (
+          <button type="button" onClick={onUndo}>
+            悔棋
+          </button>
+        )}
         <button type="button" onClick={() => setFlipped((f) => !f)}>
           翻转棋盘
         </button>
@@ -152,14 +186,15 @@ export function GameView({ onExit }: { onExit: () => void }) {
           规则
         </button>
         {state.phase === 'over' ? (
-          <button type="button" onClick={restart}>
-            再来一局
+          <button type="button" onClick={onRestart} disabled={restartDisabled}>
+            {restartLabel}
           </button>
         ) : (
           <button
             type="button"
             onClick={() => {
-              if (confirm(`${SIDE_NAMES[state.turn]}确定要认输吗？`)) dispatch({ type: 'resign', side: state.turn })
+              const who = mySide ? '' : SIDE_NAMES[resignSide]
+              if (confirm(`${who}确定要认输吗？`)) dispatch({ type: 'resign', side: resignSide })
             }}
           >
             认输
@@ -168,7 +203,7 @@ export function GameView({ onExit }: { onExit: () => void }) {
         <button type="button" onClick={onExit}>
           主页
         </button>
-        {state.phase === 'draft' && draftHidden && (
+        {draftSide && draftHidden && (
           <button type="button" className="primary" onClick={() => setDraftHidden(false)}>
             继续选锦囊
           </button>
@@ -211,16 +246,14 @@ export function GameView({ onExit }: { onExit: () => void }) {
 
       {state.phase === 'over' && !overDismissed && (
         <Modal onClose={() => setOverDismissed(true)} className="game-over">
-          <h2 className={state.winner ? `side-text ${state.winner}` : ''}>
-            {state.winner ? `${SIDE_NAMES[state.winner]}获胜！` : '和棋'}
-          </h2>
+          <h2 className={state.winner ? `side-text ${state.winner}` : ''}>{overTitle}</h2>
           <p>{state.endReason}</p>
           <div className="modal-actions">
             <button type="button" onClick={() => setOverDismissed(true)}>
               查看棋盘
             </button>
-            <button type="button" className="primary" onClick={restart}>
-              再来一局
+            <button type="button" className="primary" onClick={onRestart} disabled={restartDisabled}>
+              {restartLabel}
             </button>
           </div>
         </Modal>
@@ -252,7 +285,17 @@ export function GameView({ onExit }: { onExit: () => void }) {
   )
 }
 
-function PlayerPanel({ state, side, onInfo }: { state: GameState; side: Side; onInfo: (id: string) => void }) {
+function PlayerPanel({
+  state,
+  side,
+  mySide,
+  onInfo,
+}: {
+  state: GameState
+  side: Side
+  mySide: Side | null
+  onInfo: (id: string) => void
+}) {
   const active = state.phase !== 'over' && state.turn === side
   const diff = material(state, side) - material(state, other(side))
   return (
@@ -260,6 +303,7 @@ function PlayerPanel({ state, side, onInfo }: { state: GameState; side: Side; on
       <div className="player-head">
         <span className={`side-dot ${side}`} />
         <b>{SIDE_NAMES[side]}</b>
+        {mySide && <span className="muted">{mySide === side ? '（你）' : '（对方）'}</span>}
         {diff !== 0 && (
           <span className={`material ${diff > 0 ? 'up' : 'down'}`} title="子力差">
             {diff > 0 ? '+' : ''}

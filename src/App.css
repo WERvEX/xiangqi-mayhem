@@ -594,3 +594,167 @@ button.big small {
   font-size: 13px;
   color: #d8c9b0;
 }
+
+/* ───── 联机 ───── */
+.lobby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding-top: 4vh;
+}
+
+.lobby h2 {
+  margin: 0 0 4px;
+}
+
+.lobby-card {
+  width: min(360px, 100%);
+  background: var(--bg-2);
+  border-radius: 14px;
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lobby-card h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.lobby-card.highlight {
+  border: 1px solid var(--accent);
+}
+
+.lobby-card p {
+  margin: 0;
+}
+
+.lobby-note {
+  max-width: 360px;
+  line-height: 1.6;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid #5a4733;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.segmented button {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.segmented button.on {
+  background: #5a4733;
+  font-weight: bold;
+}
+
+.join-form,
+.invite {
+  display: flex;
+  gap: 8px;
+  width: min(360px, 100%);
+}
+
+.join-form input,
+.invite input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+  background: #1d1712;
+  border: 1px solid #5a4733;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.join-form input {
+  font-size: 20px;
+  letter-spacing: 6px;
+  text-align: center;
+}
+
+.invite input {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.room-code {
+  font-size: 48px;
+  font-weight: bold;
+  letter-spacing: 10px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.error-text {
+  color: #f0a59e;
+  max-width: 360px;
+}
+
+.conn-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+
+.conn-banner .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.conn-banner.ok {
+  color: #a9e0a0;
+  background: rgba(60, 120, 60, 0.18);
+}
+
+.conn-banner.warn {
+  color: #f0d080;
+  background: rgba(150, 120, 30, 0.2);
+}
+
+.conn-banner.bad {
+  color: #f0a59e;
+  background: rgba(140, 40, 30, 0.25);
+}
+
+.conn-banner button {
+  padding: 3px 10px;
+  font-size: 13px;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #5a4733;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.spinner.small {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-width: 2px;
+  vertical-align: -1px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
