@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { SIDE_NAMES, type Side } from '../engine'
+import { roundOf, SIDE_NAMES, type Side } from '../engine'
 import { errorText } from '../llm/client'
 import { ASSIST_LEVELS, PERSONAS, type AssistLevel, type PersonaId } from '../llm/prompt'
 import { profileLabel, useProfiles, type StoredProfile } from '../llm/settings'
@@ -389,7 +389,8 @@ function EveMatch({
     )
   }
 
-  const fatalSide = SIDES.find((side) => sides[side].fatal)
+  // 对局结束后不再提示请求失败（结束时可能还挂着），让位给结算框
+  const fatalSide = over ? undefined : SIDES.find((side) => sides[side].fatal)
   const usageText = (side: Side) => {
     const u = sides[side].usage
     const fb = sideView(liveNotes, side).fallbacks
@@ -417,6 +418,27 @@ function EveMatch({
           {usageText('black')}
         </span>
       </div>
+    </div>
+  )
+
+  // 结算：双方的用量、代走步数和结束语（结束语是对局结束后才请求的，会晚一点出现）
+  const overDetails = over && (
+    <div className="eve-summary">
+      <div className="muted">共 {roundOf(state)} 回合</div>
+      {SIDES.map((side) => {
+        const closing = liveNotes.findLast((n) => n.closing && n.side === side)?.speech
+        return (
+          <div key={side} className="eve-summary-side">
+            <div className="eve-summary-head">
+              <span className={`side-dot ${side}`} />
+              <b>{nameOf(side)}</b>
+              {state.winner === side && <span>🏆</span>}
+              <span className="muted">{usageText(side)}</span>
+            </div>
+            {closing && <div className={`speech-bubble ${side}`}>{closing}</div>}
+          </div>
+        )
+      })}
     </div>
   )
 
@@ -515,6 +537,9 @@ function EveMatch({
           sideNotes={{ red: noteOf('red'), black: noteOf('black') }}
           extraControls={controls}
           onShareReplay={over && actions.length > 0 ? () => setSharing(buildReplay()) : undefined}
+          onWatchReplay={finished.watch}
+          overModal
+          overDetails={overDetails}
         />
       </div>
 

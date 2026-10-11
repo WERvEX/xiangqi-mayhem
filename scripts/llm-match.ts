@@ -141,15 +141,17 @@ async function main() {
 
     const index = actions.length
     const theirs = history.slice(me.last + 1).filter((r) => r.side !== side)
+    // 开局先自我介绍，之后只在对方走了棋时点评（只选了锦囊不算）
+    const moved = actions.slice(me.last + 1).some((a) => a.side !== side && a.type === 'move')
     // 对喷模式：对方最近一句话
     const heard = hear ? notes.filter((n) => n.side !== side && n.speech).at(-1)?.speech : undefined
     const speech =
-      speak && (theirs.length > 0 || me.last < 0)
+      speak && (moved || me.last < 0)
         ? comment(me.profile, {
             state,
             side,
             opponentActions: theirs,
-            moment: theirs.length ? 'reply' : 'opening',
+            moment: me.last < 0 ? 'opening' : 'reply',
             persona: me.persona,
             opponentSpeech: heard,
           }).catch((e) => ({ text: '', usage: ZERO_USAGE, error: String(e) }))

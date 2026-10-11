@@ -58,6 +58,10 @@ export interface GameViewProps {
   hints?: boolean
   /** 大模型的发言等：宽屏时显示在棋盘两侧，窄屏时显示在对应一方的信息栏旁 */
   sideNotes?: Partial<Record<Side, ReactNode>>
+  /** 对局结束时弹出结算框，默认观战模式（回放）不弹 */
+  overModal?: boolean
+  /** 结算框里的额外内容（如模型对战的统计） */
+  overDetails?: ReactNode
 }
 
 /** 对局界面。新开一局时请用 key 重新挂载，以重置界面状态。 */
@@ -80,6 +84,8 @@ export function GameView({
   undoLabel = '悔棋',
   hints = false,
   sideNotes,
+  overModal = !spectator,
+  overDetails,
 }: GameViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [flipped, setFlipped] = useState(mySide === 'black')
@@ -378,10 +384,11 @@ export function GameView({
         </Modal>
       )}
 
-      {state.phase === 'over' && !overDismissed && !spectator && (
+      {state.phase === 'over' && !overDismissed && overModal && (
         <Modal onClose={() => setOverDismissed(true)} className="game-over">
           <h2 className={state.winner ? `side-text ${state.winner}` : ''}>{overTitle}</h2>
           <p>{state.endReason}</p>
+          {overDetails}
           <div className="modal-actions">
             <button type="button" onClick={() => setOverDismissed(true)}>
               查看棋盘

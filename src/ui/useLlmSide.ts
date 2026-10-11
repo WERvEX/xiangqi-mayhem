@@ -93,7 +93,12 @@ export function useLlmSide(p: {
   const sinceLast = (acts: Action[], hist: TurnRecord[]) => {
     let j = acts.length - 1
     while (j >= 0 && acts[j].side !== side) j--
-    return { theirs: hist.slice(j + 1).filter((r) => r.side !== side), first: j < 0 }
+    return {
+      theirs: hist.slice(j + 1).filter((r) => r.side !== side),
+      /** 对方走了棋（只选了锦囊不算，没什么可评的） */
+      moved: acts.slice(j + 1).some((a) => a.side !== side && a.type === 'move'),
+      first: j < 0,
+    }
   }
 
   /** 对喷模式：对方最近一句话 */
@@ -146,9 +151,11 @@ export function useLlmSide(p: {
           // 局面已经变了（不太可能），就不写具体走法
         }
       }
+      // 选锦囊时双方同时选，对方可能先选完，所以按落子时的步数记，而不是开始思考时的
+      const at = latest.current.actions.length
       setNotes((cur) => {
         const pending = cur.find((n) => n.task === task && n.side === side && !n.action)
-        return [...cur.filter((n) => n !== pending), { ...pending, i: index, side, task: undefined, action, ...extra }]
+        return [...cur.filter((n) => n !== pending), { ...pending, i: at, side, task: undefined, action, ...extra }]
       })
       dispatch(action)
     }
@@ -171,10 +178,11 @@ export function useLlmSide(p: {
       }
 
       // 发言与走棋同时请求：发言时模型还没决定走哪步，不会剧透
-      const { theirs, first } = sinceLast(acts, hist)
+      const { theirs, moved, first } = sinceLast(acts, hist)
       let shownAt = 0
+      // 开局先自我介绍，之后只在对方走了棋时点评
       const wantSpeech =
-        opts.speak && (theirs.length > 0 || first) && !ns.some((n) => n.task === task && n.side === side && n.speech)
+        opts.speak && (moved || first) && !ns.some((n) => n.task === task && n.side === side && n.speech)
       const speech = wantSpeech
         ? comment(
             profile,
@@ -182,7 +190,7 @@ export function useLlmSide(p: {
               state: s,
               side,
               opponentActions: theirs,
-              moment: theirs.length ? 'reply' : 'opening',
+              moment: first ? 'opening' : 'reply',
               persona: personaText(opts),
               opponentSpeech: opponentSpeech(ns),
             },

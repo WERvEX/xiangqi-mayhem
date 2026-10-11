@@ -39,20 +39,29 @@ export function taskFor(state: GameState, actionCount: number, side: Side): stri
   return state.phase === 'play' && state.turn === side ? `p${actionCount}` : null
 }
 
-/** 筛出当前仍然有效的记录 */
+/**
+ * 筛出当前仍然有效的记录。
+ * 已落子的记录按操作对象判断：步数对不上时（如双方同时选锦囊、几乎同时落子），按操作实际所在的位置修正，而不是丢掉
+ */
 export function validNotes(
   notes: LiveNote[],
   actions: Action[],
   state: GameState,
   tasks: Partial<Record<Side, string | null>>,
 ): LiveNote[] {
-  return notes.filter((n) =>
-    n.action
-      ? actions[n.i] === n.action
-      : n.task
-        ? n.task === tasks[n.side]
-        : !!n.closing && state.phase === 'over' && n.i === actions.length,
-  )
+  const out: LiveNote[] = []
+  for (const n of notes) {
+    if (n.action) {
+      if (actions[n.i] === n.action) out.push(n)
+      else {
+        const i = actions.lastIndexOf(n.action)
+        if (i >= 0) out.push({ ...n, i })
+      }
+    } else if (n.task ? n.task === tasks[n.side] : !!n.closing && state.phase === 'over' && n.i === actions.length) {
+      out.push(n)
+    }
+  }
+  return out
 }
 
 /** 给玩家看的思考：结构化的局面判断、理由、策略和计划，最后是模型自带的推理过程 */

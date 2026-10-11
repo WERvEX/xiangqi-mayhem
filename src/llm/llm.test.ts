@@ -137,6 +137,14 @@ describe('模型对战的隔离', () => {
     const move = movePrompt({ state: s, side: s.turn, history: [], memo: '', assist: 'facts' }, moveOptions(s, 'facts'))
     expect(move).not.toContain(said)
   })
+
+  it('开场发言是自我介绍，不带棋盘', () => {
+    const s = started()
+    const intro = commentPrompt({ state: s, side: 'black', opponentActions: [], moment: 'opening', persona: 'x' })
+    expect(intro).toContain('自我介绍')
+    expect(intro).toContain('黑方')
+    expect(intro).not.toContain(renderPosition(s, 'black'))
+  })
 })
 
 describe('辅助标注', () => {

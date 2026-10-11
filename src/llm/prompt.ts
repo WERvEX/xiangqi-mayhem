@@ -449,8 +449,10 @@ export function commentPrompt({
   persona,
   opponentSpeech,
 }: CommentPromptInput): string {
-  const parts = [renderPosition(state, side), '']
-  if (opponentActions.length) {
+  const opening = moment === 'opening'
+  // 开场是自我介绍，用不着棋盘
+  const parts = opening ? [`你执${SIDE_NAMES[side]}，这是一局带锦囊的中国象棋（象棋大乱斗），对局刚开始。`, ''] : [renderPosition(state, side), '']
+  if (opponentActions.length && !opening) {
     parts.push(
       '上次你行动之后，对方：',
       ...opponentActions.map((r) => `- ${r.text}${r.events.length ? `（${r.events.join('；')}）` : ''}`),
@@ -464,7 +466,8 @@ export function commentPrompt({
   if (opponentSpeech) parts.push(`对方刚才对你说：「${opponentSpeech}」`, '')
   parts.push(`你的说话风格：${persona}`, '')
   const task: Record<CommentMoment, string> = {
-    opening: '对局刚开始，对你的对手说一句开场白。',
+    opening:
+      '向你的对手做个简短的自我介绍：你是谁（你是哪个大模型、哪家公司做的，如果你清楚的话），再用一句话亮出你这局的态度。不用分析局面。',
     reply:
       '用一两句话点评对方刚才这步棋和当前局势，重点说棋盘上发生了什么：吃子、威胁、攻守形势。锦囊只在它刚刚改变了局面时才提。只评论已经发生的事，不要提你接下来打算怎么走。',
     win: '对局结束，你赢了。对你的对手说一句结束语。',
@@ -472,7 +475,7 @@ export function commentPrompt({
     draw: '对局结束，双方和棋。对你的对手说一句结束语。',
   }
   parts.push(task[moment])
-  parts.push('像棋手对局时随口说的一句话：以评棋为主，不必每句都冲着对手说。')
+  if (!opening) parts.push('像棋手对局时随口说的一句话：以评棋为主，不必每句都冲着对手说。')
   if (opponentSpeech) parts.push('对方的话可以简短接一句，也可以不理；重点仍是点评棋局，不要变成吵架，也不要透露你的打算。')
   parts.push('直接输出你要说的话（不超过 60 个字），不要加引号、不要任何格式或解释。')
   return parts.join('\n')

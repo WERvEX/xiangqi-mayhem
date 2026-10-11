@@ -1483,6 +1483,32 @@ button.link {
     transform: translateY(6px) scale(0.96);
   }
 }
+.eve-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 4px 0 16px;
+  text-align: left;
+}
+.eve-summary > .muted {
+  text-align: center;
+  font-size: 13px;
+}
+.eve-summary-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.eve-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.eve-summary-head .muted {
+  margin-left: auto;
+  font-size: 12px;
+}
 .speech-empty {
   padding-left: 4px;
 }
