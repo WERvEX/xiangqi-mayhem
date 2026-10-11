@@ -1,0 +1,35 @@
+name: 🐛 问题反馈
+description: 遇到了错误、卡住或者不对劲的地方
+title: "[问题] "
+body:
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 在哪个模式
+      options:
+        - 联机对战
+        - 同屏对战
+        - 挑战 AI（规则 AI）
+        - 挑战 AI（大模型）
+        - 模型斗蛐蛐
+        - 回放 / 对局记录
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 你做了什么、期望看到什么、实际看到了什么
+    validations:
+      required: true
+  - type: textarea
+    id: replay
+    attributes:
+      label: 回放链接或文件
+      description: 对局相关的问题，附上回放（对局结束后「分享回放」，或主页「对局记录」里分享）能更快定位。**请不要贴 API 密钥**
+  - type: input
+    id: device
+    attributes:
+      label: 设备和浏览器
+      description: 比如「Windows Chrome」「iPhone 微信内置浏览器」

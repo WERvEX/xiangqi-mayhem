@@ -86,6 +86,15 @@ button.big small {
   padding: 4px 18px 10px;
 }
 
+.home-footer {
+  font-size: 13px;
+  text-align: center;
+  margin: 16px 0 0;
+}
+.home-footer a {
+  color: var(--gold);
+}
+
 .rules {
   padding-left: 20px;
   line-height: 1.7;

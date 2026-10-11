@@ -3,6 +3,8 @@ import { ResumeCard } from './AiGame'
 import { Codex, Modal, Rules } from './common'
 import { clearSaved, useSaved, type SaveSlot } from './savedGame'
 
+const REPO_URL = 'https://github.com/WERvEX/xiangqi-mayhem'
+
 export function Home({
   onPvp,
   onPve,
@@ -67,6 +69,14 @@ export function Home({
         <h3>规则速览</h3>
         <Rules />
       </section>
+
+      <p className="home-footer muted">
+        有新锦囊的点子、发现了问题？欢迎到{' '}
+        <a href={`${REPO_URL}/issues/new/choose`} target="_blank" rel="noreferrer">
+          GitHub
+        </a>{' '}
+        提给我们 · 开源（GPL-3.0）
+      </p>
 
       {showCodex && (
         <Modal onClose={() => setShowCodex(false)} className="codex-modal">

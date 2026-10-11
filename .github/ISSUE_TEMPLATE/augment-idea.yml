@@ -1,0 +1,31 @@
+name: 💡 锦囊点子
+description: 提一个新锦囊的想法
+title: "[锦囊点子] "
+labels: ["锦囊点子"]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: 名字
+      description: 四字成语或典故最好，比如「调虎离山」。没想好可以不填
+  - type: textarea
+    id: effect
+    attributes:
+      label: 效果
+      description: 用一两句话写清楚它做什么，比如「选中时，对方最靠前的车退回开局位置」
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: 你觉得算哪一档
+      options:
+        - 白银（小改动）
+        - 黄金（明显改变打法）
+        - 棱彩（能扭转局面）
+        - 不确定
+  - type: textarea
+    id: why
+    attributes:
+      label: 好玩在哪
+      description: 会带来什么新打法、什么名场面？有没有担心太强或太弱的地方？
