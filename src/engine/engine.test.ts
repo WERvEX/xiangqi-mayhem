@@ -198,6 +198,7 @@ describe('锦囊', () => {
     let s = createGame('hp')
     s.draft!.sides.red.options = ['huangpao']
     s = applyAction(s, { type: 'pick', side: 'red', augmentId: 'huangpao' })
+    s = applyAction(s, { type: 'pick', side: 'black', augmentId: s.draft!.sides.black.options[0] })
     const promoted = s.pieces.filter((p) => p.side === 'red' && p.promoted)
     expect(promoted).toHaveLength(2)
     expect(promoted.map((p) => p.x)).toContain(4)
@@ -553,9 +554,27 @@ describe('新锦囊', () => {
   it('反间计：策反一个未过河的敌方兵卒', () => {
     let s = createGame('fj')
     s.draft!.sides.red.options = ['fanjian']
+    s.draft!.sides.black.options = ['feixiang']
     s = applyAction(s, { type: 'pick', side: 'red', augmentId: 'fanjian' })
+    s = applyAction(s, { type: 'pick', side: 'black', augmentId: 'feixiang' })
     expect(s.pieces.filter((p) => p.alive && p.type === 'P' && p.side === 'red')).toHaveLength(7)
     expect(s.pieces.filter((p) => p.alive && p.type === 'P' && p.side === 'black')).toHaveLength(3)
+  })
+
+  it('双方都选完才揭晓：先选的一方的锦囊在揭晓前不生效、不出现', () => {
+    let s = createGame('reveal')
+    s.draft!.sides.red.options = ['tianjiang']
+    s.draft!.sides.black.options = ['feixiang']
+    const rooks = (st: GameState) => st.pieces.filter((p) => p.alive && p.side === 'red' && p.type === 'R').length
+    s = applyAction(s, { type: 'pick', side: 'red', augmentId: 'tianjiang' })
+    expect(s.phase).toBe('draft')
+    expect(s.augments.red).toHaveLength(0)
+    expect(rooks(s)).toBe(2)
+    expect(s.log.some((e) => e.text.includes('天降神兵'))).toBe(false)
+    s = applyAction(s, { type: 'pick', side: 'black', augmentId: 'feixiang' })
+    expect(s.phase).toBe('play')
+    expect(s.augments.red.map((a) => a.id)).toEqual(['tianjiang'])
+    expect(rooks(s)).toBe(3)
   })
 
   it('天降神兵 / 众志成城 / 御林军', () => {

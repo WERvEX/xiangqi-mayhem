@@ -113,6 +113,78 @@ describe('联机会话', () => {
     expect(snap(host).state!.phase).toBe('draft')
   })
 
+  it('悔棋：对方同意后撤回申请方的上一步；对方已应的一步也一起撤回', async () => {
+    const { host, guest } = await setup('red')
+    for (const s of [host, guest]) {
+      const side = snap(s).mySide!
+      s.submit({ type: 'pick', side, augmentId: snap(s).state!.draft!.sides[side].options[0] })
+    }
+    await flush()
+    expect(guest.canRequestUndo()).toBe(false) // 还没走过棋
+    playOne(host, guest) // 红（房主）走
+    await flush()
+    const beforeBlack = snap(host).state!
+    playOne(host, guest) // 黑（客人）走
+    await flush()
+    const afterBlack = snap(host).state!
+
+    // 客人申请，房主拒绝：局面不变
+    guest.requestUndo()
+    await flush()
+    expect(snap(host).undoRequester).toBe('black')
+    host.answerUndo(false)
+    await flush()
+    expect(snap(guest).undoRequester).toBeNull()
+    expect(snap(guest).undoResult?.result).toBe('declined')
+    expect(snap(host).state).toEqual(afterBlack)
+
+    // 客人再申请，房主同意：回到黑方走棋之前
+    guest.requestUndo()
+    await flush()
+    host.answerUndo(true)
+    await flush()
+    await flush()
+    expect(snap(host).state).toEqual(beforeBlack)
+    expect(snap(guest).state).toEqual(beforeBlack)
+    expect(snap(guest).undoResult?.result).toBe('accepted')
+
+    // 房主申请：黑方已经应了一步，两步一起撤回
+    playOne(host, guest)
+    await flush()
+    host.requestUndo()
+    await flush()
+    expect(snap(guest).undoRequester).toBe('red')
+    guest.answerUndo(true)
+    await flush()
+    await flush()
+    expect(snap(host).state!.turn).toBe('red')
+    expect(snap(guest).state).toEqual(snap(host).state)
+  })
+
+  it('房主刷新页面后恢复房间，客人自动重连回来', async () => {
+    const { net, host, guest } = await setup('red')
+    for (const s of [host, guest]) {
+      const side = snap(s).mySide!
+      s.submit({ type: 'pick', side, augmentId: snap(s).state!.draft!.sides[side].options[0] })
+    }
+    await flush()
+    playOne(host, guest)
+    await flush()
+    const save = host.hostSave()!
+    const before = snap(host).state
+    host.leave() // 相当于房主刷新页面：房间和连接都没了
+    await flush()
+    expect(snap(guest).reconnecting).toBe(true)
+
+    const resumed = OnlineSession.resumeHost(net.transport, save)
+    await flush()
+    expect(snap(resumed).state).toEqual(before)
+    await new Promise((r) => setTimeout(r, 1700))
+    expect(snap(resumed).opponentOnline).toBe(true)
+    expect(snap(guest).reconnecting).toBe(false)
+    expect(snap(guest).state).toEqual(before)
+  })
+
   it('房间不存在时报错', async () => {
     const net = new MemoryNetwork()
     const guest = OnlineSession.join(net.transport, '999999', 't')

@@ -22,7 +22,7 @@ import {
 } from '../engine'
 import { DIFFICULTIES, type Difficulty } from '../ai/bot'
 import { Board, type FxItem } from './Board'
-import { AugmentCard, AugmentChip, AugmentGlyph, Modal, Rules } from './common'
+import { AugmentCard, AugmentChip, AugmentGlyph, ConfirmModal, Modal, Rules } from './common'
 import { useHint } from './Hint'
 
 const SIDES: Side[] = ['red', 'black']
@@ -48,8 +48,12 @@ export interface GameViewProps {
   labels?: Partial<Record<Side, string>>
   /** 额外的控制按钮 */
   extraControls?: ReactNode
-  /** 提供时显示"分享回放" */
+  /** 提供时，对局结束后显示"分享回放" */
   onShareReplay?: () => void
+  /** 提供时，对局结束后可以直接查看回放 */
+  onWatchReplay?: () => void
+  /** 额外的悔棋入口文字（联机为"申请悔棋"） */
+  undoLabel?: string
   /** 是否提供 AI 走法推荐（联机和回放中关闭） */
   hints?: boolean
   /** 大模型的发言等：宽屏时显示在棋盘两侧，窄屏时显示在对应一方的信息栏旁 */
@@ -72,6 +76,8 @@ export function GameView({
   labels,
   extraControls,
   onShareReplay,
+  onWatchReplay,
+  undoLabel = '悔棋',
   hints = false,
   sideNotes,
 }: GameViewProps) {
@@ -82,6 +88,7 @@ export function GameView({
   const [draftHidden, setDraftHidden] = useState(false)
   const [infoId, setInfoId] = useState<string | null>(null)
   const [showRules, setShowRules] = useState(false)
+  const [confirmResign, setConfirmResign] = useState(false)
 
   const [fx, setFx] = useState<FxItem[]>([])
   const [ghosts, setGhosts] = useState<Piece[]>([])
@@ -250,9 +257,9 @@ export function GameView({
       )}
 
       <div className="controls">
-        {onUndo && !spectator && (
+        {onUndo && !spectator && state.phase !== 'over' && (
           <button type="button" onClick={onUndo}>
-            悔棋
+            {undoLabel}
           </button>
         )}
         <button type="button" onClick={() => setFlipped((f) => !f)}>
@@ -287,17 +294,16 @@ export function GameView({
               {restartLabel}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={() => {
-                const who = mySide ? '' : SIDE_NAMES[resignSide]
-                if (confirm(`${who}确定要认输吗？`)) dispatch({ type: 'resign', side: resignSide })
-              }}
-            >
+            <button type="button" onClick={() => setConfirmResign(true)}>
               认输
             </button>
           ))}
-        {onShareReplay && (
+        {onWatchReplay && state.phase === 'over' && !spectator && (
+          <button type="button" onClick={onWatchReplay}>
+            查看回放
+          </button>
+        )}
+        {onShareReplay && (spectator || state.phase === 'over') && (
           <button type="button" onClick={onShareReplay}>
             分享回放
           </button>
@@ -335,6 +341,21 @@ export function GameView({
         />
       )}
 
+      {confirmResign && (
+        <ConfirmModal
+          title={`${mySide ? '' : SIDE_NAMES[resignSide]}确定要认输吗？`}
+          message="认输后本局立即结束。"
+          confirmLabel="认输"
+          cancelLabel="继续下"
+          danger
+          onConfirm={() => {
+            setConfirmResign(false)
+            if (state.phase !== 'over') dispatch({ type: 'resign', side: resignSide })
+          }}
+          onCancel={() => setConfirmResign(false)}
+        />
+      )}
+
       {pendingMove && (
         <Modal onClose={() => setPendingMove(null)} className="confirm">
           <h3>⚠ 送将提醒</h3>
@@ -365,9 +386,14 @@ export function GameView({
             <button type="button" onClick={() => setOverDismissed(true)}>
               查看棋盘
             </button>
+            {onWatchReplay && (
+              <button type="button" onClick={onWatchReplay}>
+                查看回放
+              </button>
+            )}
             {onShareReplay && (
               <button type="button" onClick={onShareReplay}>
-                保存回放
+                分享回放
               </button>
             )}
             <button type="button" onClick={onExit}>
@@ -498,6 +524,7 @@ function DraftModal({
 }) {
   const ds = state.draft!.sides[side]
   const opponent = state.augments[other(side)]
+  const opponentReady = state.draft!.sides[other(side)].done
   return (
     <Modal className="draft">
       <h2>
@@ -529,6 +556,9 @@ function DraftModal({
           ))}
         </p>
       )}
+      <p className="muted draft-secret">
+        {opponentReady ? '对方已选好。' : '对方正在选择。'}双方都选完后同时揭晓
+      </p>
       {hint?.rerollAdvised && <p className="hint-note">💡 AI 觉得这三个都不太理想，建议刷新</p>}
       <div className="modal-actions">
         <button type="button" onClick={onHide}>

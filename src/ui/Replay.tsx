@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { RULES_VERSION, type Side } from '../engine'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { RULES_VERSION, SIDE_NAMES, type Side } from '../engine'
+import { removeFromHistory, useHistory, type HistoryEntry } from '../replay/history'
 import {
   hasNotes,
   parseReplay,
@@ -30,16 +31,19 @@ function download(name: string, text: string) {
 // ───────────── 分享 ─────────────
 
 export function ReplayShareModal({ replay, onClose }: { replay: Replay; onClose: () => void }) {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'ok' | 'fail' | null>(null)
   const link = useMemo(() => replayLink(replay), [replay])
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(link)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopied('ok')
+      setTimeout(() => setCopied(null), 2000)
     } catch {
-      prompt('复制下面的链接：', link)
+      // 有的浏览器（如部分 App 内置浏览器）不允许写剪贴板：选中链接，让玩家手动复制
+      inputRef.current?.select()
+      setCopied('fail')
     }
   }
 
@@ -61,11 +65,12 @@ export function ReplayShareModal({ replay, onClose }: { replay: Replay; onClose:
         <p className="muted">链接里包含整局棋（共 {replay.actions.length} 步），对方打开就能观看，不需要服务器。</p>
       )}
       <div className="invite">
-        <input readOnly value={link} onFocus={(e) => e.target.select()} />
+        <input ref={inputRef} readOnly value={link} onFocus={(e) => e.target.select()} />
         <button type="button" className="primary" onClick={copy}>
-          {copied ? '已复制 ✓' : '复制链接'}
+          {copied === 'ok' ? '已复制 ✓' : '复制链接'}
         </button>
       </div>
+      {copied === 'fail' && <p className="field-note warn">无法自动复制，链接已选中，请手动复制</p>}
       <div className="modal-actions">
         <button type="button" className={notes ? 'primary' : ''} onClick={save}>
           下载回放文件
@@ -94,9 +99,11 @@ export function ReplayImport({ onLoad, onBack }: { onLoad: (r: LoadedReplay) => 
 
   return (
     <div className="lobby">
-      <h2>观看回放</h2>
+      <h2>对局记录</h2>
+      <RecentGames onOpen={tryLoad} />
       <section className="lobby-card">
-        <h3>粘贴回放链接</h3>
+        <h3>打开别人分享的回放</h3>
+        <p className="muted left">粘贴回放链接：</p>
         <textarea
           className="replay-input"
           rows={4}
@@ -108,11 +115,9 @@ export function ReplayImport({ onLoad, onBack }: { onLoad: (r: LoadedReplay) => 
           }}
         />
         <button type="button" className="primary" disabled={!text.trim()} onClick={() => tryLoad(text)}>
-          打开
+          打开链接
         </button>
-      </section>
-      <section className="lobby-card">
-        <h3>或者打开回放文件</h3>
+        <p className="muted left">或者选择回放文件：</p>
         <input
           type="file"
           accept=".json,application/json"
@@ -286,5 +291,79 @@ export function ReplayView({
       />
       {sharing && <ReplayShareModal replay={replay} onClose={() => setSharing(false)} />}
     </>
+  )
+}
+
+// ───────────── 最近的对局 ─────────────
+
+function resultText(e: HistoryEntry): string {
+  if (!e.winner) return '和棋'
+  if (e.mySide) return e.winner === e.mySide ? '胜' : '负'
+  return `${SIDE_NAMES[e.winner]}胜`
+}
+
+function opponentText(e: HistoryEntry): string {
+  if (e.mode === 'hotseat') return '同屏对战'
+  if (e.mySide) {
+    const opp = e.mySide === 'red' ? e.black : e.red
+    return `执${e.mySide === 'red' ? '红' : '黑'} vs ${opp ?? MODE_NAMES[e.mode]}`
+  }
+  return `${e.red ?? '红方'} vs ${e.black ?? '黑方'}`
+}
+
+function RecentGames({ onOpen }: { onOpen: (file: string) => void }) {
+  const history = useHistory()
+  const [sharing, setSharing] = useState<Replay | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  if (history.length === 0) {
+    return (
+      <section className="lobby-card">
+        <h3>最近的对局</h3>
+        <p className="muted">还没有对局记录。每局结束后会自动保存在这台设备上（最多 20 局）。</p>
+      </section>
+    )
+  }
+  return (
+    <section className="lobby-card">
+      <h3>最近的对局</h3>
+      <ul className="history-list">
+        {history.map((e) => {
+          const result = resultText(e)
+          return (
+            <li key={e.id}>
+              <div className="history-main">
+                <span className={`history-result ${result === '胜' ? 'win' : result === '负' ? 'lose' : ''}`}>{result}</span>
+                <span className="history-title">{opponentText(e)}</span>
+                <span className="muted history-sub">
+                  {MODE_NAMES[e.mode]} · {e.rounds} 回合 · {new Date(e.savedAt).toLocaleString()}
+                </span>
+              </div>
+              <div className="history-actions">
+                <button type="button" className="primary" onClick={() => onOpen(e.file)}>
+                  观看
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      setSharing(parseReplay(e.file))
+                    } catch (err) {
+                      setError(err instanceof ReplayError ? err.message : '无法打开这个回放')
+                    }
+                  }}
+                >
+                  分享
+                </button>
+                <button type="button" onClick={() => removeFromHistory(e.id)} title="删除这条记录">
+                  删除
+                </button>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+      {error && <p className="error-text">{error}</p>}
+      {sharing && <ReplayShareModal replay={sharing} onClose={() => setSharing(null)} />}
+    </section>
   )
 }

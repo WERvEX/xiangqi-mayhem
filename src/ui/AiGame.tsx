@@ -9,6 +9,7 @@ import { GameView } from './GameView'
 import { LlmMatch, type LlmOptions, type LlmSave } from './LlmGame'
 import { ReplayShareModal } from './Replay'
 import { clearSaved, loadSaved, useAutoSave, useSaved, type SavedGame } from './savedGame'
+import { useFinishedGame } from './useFinishedGame'
 import { useLocalGame } from './useLocalGame'
 
 type Opponent = 'rule' | 'llm'
@@ -382,6 +383,8 @@ function AiMatch({
 
   const aiName = `AI·${DIFFICULTIES[settings.difficulty].name}·${PERSONALITIES[settings.personality].name}`
   useAutoSave<AiSave>('ai', game, `规则 ${aiName}`, { settings, humanSide })
+  const buildReplay = () => makeReplay(seed, actions, { mode: 'ai', [humanSide]: '玩家', [aiSide]: aiName })
+  const finished = useFinishedGame(state, buildReplay, humanSide)
   const labels = { [humanSide]: '（你）', [aiSide]: `（${aiName}）` }
 
   const banner = (
@@ -403,34 +406,27 @@ function AiMatch({
 
   return (
     <>
-      <GameView
-        key={seed}
-        state={state}
-        dispatch={dispatch}
-        mySide={humanSide}
-        labels={labels}
-        banner={banner}
-        onExit={onExit}
-        // 连同 AI 的应对一起撤回，回到你上一次行动之前
-        onUndo={canUndo ? () => undo(humanToMove) : undefined}
-        hints
-        onRestart={() => {
-          clearSaved('ai')
-          restart()
-        }}
-        onShareReplay={
-          actions.length > 0
-            ? () =>
-                setSharing(
-                  makeReplay(seed, actions, {
-                    mode: 'ai',
-                    [humanSide]: '玩家',
-                    [aiSide]: aiName,
-                  }),
-                )
-            : undefined
-        }
-      />
+      {finished.reviewView}
+      <div hidden={!!finished.reviewView}>
+        <GameView
+          key={seed}
+          state={state}
+          dispatch={dispatch}
+          mySide={humanSide}
+          labels={labels}
+          banner={banner}
+          onExit={onExit}
+          // 连同 AI 的应对一起撤回，回到你上一次行动之前
+          onUndo={canUndo ? () => undo(humanToMove) : undefined}
+          hints
+          onRestart={() => {
+            clearSaved('ai')
+            restart()
+          }}
+          onShareReplay={actions.length > 0 ? () => setSharing(buildReplay()) : undefined}
+          onWatchReplay={finished.watch}
+        />
+      </div>
       {sharing && <ReplayShareModal replay={sharing} onClose={() => setSharing(null)} />}
     </>
   )

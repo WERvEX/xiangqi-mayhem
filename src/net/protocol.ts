@@ -1,10 +1,10 @@
 import { RULES_VERSION, type Action, type Side } from '../engine'
 
 /**
- * 双方版本不一致会拒绝连接。目前直接使用规则版本：
- * 规则不同的两端各自计算会得到不同的局面。
+ * 双方版本不一致会拒绝连接：规则不同的两端各自计算会得到不同的局面，消息格式不同也无法通信。
+ * 规则版本 × 100 + 协议修订号（1：悔棋）
  */
-export const PROTOCOL_VERSION = RULES_VERSION
+export const PROTOCOL_VERSION = RULES_VERSION * 100 + 1
 
 export type NetMessage =
   /** 客人 → 房主：加入或重连 */
@@ -21,6 +21,12 @@ export type NetMessage =
   | { t: 'rematch' }
   /** 房主 → 客人：当前再来一局的投票 */
   | { t: 'rematch-status'; votes: Side[] }
+  /** 客人 → 房主：申请悔棋 */
+  | { t: 'undo-request' }
+  /** 客人 → 房主：回应房主的悔棋申请 */
+  | { t: 'undo-answer'; accept: boolean }
+  /** 房主 → 客人：悔棋申请的状态（requester 为 null 表示没有进行中的申请） */
+  | { t: 'undo-status'; requester: Side | null; result?: 'accepted' | 'declined' }
   /** 房主 → 客人：拒绝加入 */
   | { t: 'reject'; reason: string }
   /** 心跳，由传输层处理 */

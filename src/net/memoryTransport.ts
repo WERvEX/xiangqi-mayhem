@@ -9,8 +9,9 @@ export class MemoryNetwork {
   links: { host: Connection; guest: Connection; drop(): void }[] = []
 
   transport: Transport = {
-    host: async (): Promise<HostHandle> => {
-      const code = String(this.nextCode++)
+    host: async (roomCode?: string): Promise<HostHandle> => {
+      const code = roomCode ?? String(this.nextCode++)
+      if (this.rooms.has(code)) throw new Error('房间号已被占用')
       let handler: ((conn: Connection) => void) | null = null
       this.rooms.set(code, (conn) => handler?.(conn))
       return {

@@ -39,6 +39,7 @@ src/
     parse.ts         # 解析模型回复（JSON、代码块、正则兜底）
     player.ts        # decide()、comment()：重试与失败处理
   replay/replay.ts   # 回放的编码、解码与序列化
+  replay/history.ts  # 最近 20 局的对局记录（localStorage）
   net/               # 联机
     protocol.ts      # 消息格式与协议版本
     transport.ts     # 传输层接口
@@ -57,6 +58,7 @@ src/
     Replay.tsx       # 回放的分享、导入与播放
     useLocalGame.ts  # 本机对局的历史记录（悔棋、回放）
     savedGame.ts     # 本机对局的自动存档（刷新后继续上一局）
+    useFinishedGame.tsx # 对局结束：存进对局记录、查看回放
 scripts/simulate.ts  # 自我对战统计
 scripts/llm-match.ts # 大模型对规则 AI（命令行）
 scripts/llm-proxy*.ts # 大模型请求转发（本地工具 + 开发服务器中间件）
@@ -202,6 +204,7 @@ npm run sim -- --compare --new 3 --old 2 --time 300   # AI 评估版本对比（
 - **房主权威**：客人的操作先发给房主，房主用规则引擎校验，按顺序编号后广播；双方按同一顺序应用
 - 客人收到的编号出现缺口时会请求完整同步（`resync`）
 - 客人身份保存在 `sessionStorage`，刷新页面后用同一身份重连；不同身份的第三人会被拒绝
+- 协议版本 = 规则版本 × 100 + 协议修订号，双方不一致时拒绝连接
 - 心跳每 4 秒一次，13 秒没有消息视为断线
 
 ### 传输层
@@ -223,6 +226,18 @@ interface Transport {
 
 连上之后，联机状态条会显示「直连」或「经中转」；联机大厅有「网络检测」，逐项检查信令、打洞和中转。
 
+### 断线重连
+
+- 客人：断线后持续重连约 2 分钟（间隔逐渐变长），页面从后台回到前台时立即重连；刷新页面后凭 `sessionStorage` 里的身份自动重新加入
+- 房主：房间状态（种子、操作序列、客人身份）存在本标签页的 `sessionStorage`，链接变为 `#host=房间号`，刷新后自动恢复房间
+- 信令 ID 分"代"：房间号 123456 第 0 代的 ID 是 `xqmayhem-123456`，之后是 `xqmayhem-123456-1`、`-2`……。房主每次恢复房间换新一代；客人连接时同时尝试 6 代，谁在线连谁。
+  这样做的原因：页面崩溃或被系统杀掉时来不及注销，PeerJS 信令服务器要几分钟才释放旧 ID，不能干等。正常关闭页面时会在 `pagehide` 里主动注销
+- 与信令服务器断开时（网络切换、切到后台），房主每 5 秒尝试重连
+
+### 悔棋
+
+联机悔棋需要对方同意，由房主执行：撤回申请方最近一次走棋（对方已经应了一步的话一起撤回），然后向客人发送完整同步。申请方在对方回应前又走了棋、或者对方断线，申请作废。
+
 ### 中转服务器
 
 - 安装：在一台 Ubuntu 云服务器上运行 `bash scripts/turn-setup.sh <公网IP>`，然后在云服务商控制台放行 UDP 3478、TCP 3478、UDP 49152-49999，把脚本输出的地址和密码填进 `src/net/iceServers.ts`
@@ -236,7 +251,7 @@ interface Transport {
 
 ### 测试
 
-`src/net/session.test.ts` 用 `MemoryNetwork` 模拟网络，覆盖加入、并发选锦囊、越权操作、断线重连、房间已满、再来一局。
+`src/net/session.test.ts` 用 `MemoryNetwork` 模拟网络，覆盖加入、并发选锦囊、越权操作、断线重连、房主刷新后恢复房间、悔棋、房间已满、再来一局。
 
 ## 部署
 

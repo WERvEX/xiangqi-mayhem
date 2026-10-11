@@ -53,7 +53,7 @@ export function Home({
             锦囊图鉴
           </button>
           <button type="button" className="big" onClick={onReplay}>
-            观看回放
+            对局记录
           </button>
           <button type="button" className="big" onClick={onSettings}>
             ⚙ 设置

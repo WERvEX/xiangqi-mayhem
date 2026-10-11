@@ -19,6 +19,41 @@ export function Modal({
   )
 }
 
+/** 游戏内的确认框（代替浏览器自带的 confirm） */
+export function ConfirmModal({
+  title,
+  message,
+  confirmLabel = '确定',
+  cancelLabel = '取消',
+  danger = false,
+  onConfirm,
+  onCancel,
+}: {
+  title: string
+  message?: ReactNode
+  confirmLabel?: string
+  cancelLabel?: string
+  /** 确认按钮用醒目的红色（认输、删除等） */
+  danger?: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <Modal onClose={onCancel} className="confirm">
+      <h3>{title}</h3>
+      {message && <p>{message}</p>}
+      <div className="modal-actions">
+        <button type="button" onClick={onCancel}>
+          {cancelLabel}
+        </button>
+        <button type="button" className={danger ? 'danger' : 'primary'} onClick={onConfirm} autoFocus>
+          {confirmLabel}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 export function AugmentGlyph({ id, size = 'md' }: { id: string; size?: 'sm' | 'md' | 'lg' }) {
   const def = AUGMENTS[id]
   return <span className={`glyph glyph-${size} tier-${def.tier}`}>{def.glyph}</span>
@@ -99,7 +134,7 @@ export function Rules() {
       </li>
       <li>将帅在同一直线上且中间无子时，可以"飞将"直接吃掉对方。</li>
       <li>
-        第 {first}、{rest.join('、')} 回合，双方各自从 3 个锦囊中选 1 个（轮流在红方、黑方走棋前发放），锦囊对双方公开。每局可刷新{' '}
+        第 {first}、{rest.join('、')} 回合，双方各自从 3 个锦囊中选 1 个（轮流在红方、黑方走棋前发放）。双方都选完后同时揭晓，之后对双方公开。每局可刷新{' '}
         {CONFIG.rerollsPerGame} 次选项。
       </li>
       <li>锦囊分白银、黄金、棱彩三档，越往后品质越高；子力落后较多的一方，选项会提升一档。</li>

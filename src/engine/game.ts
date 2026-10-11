@@ -18,7 +18,7 @@ import type { Action, DraftSide, GameState, Move, Piece, RuleMods, Side, Tier } 
  * 规则版本。任何会改变对局结果的改动（包括锦囊数值）都要加一。
  * 联机时双方版本必须一致；回放会记录它，版本不同时给出提示。
  */
-export const RULES_VERSION = 3
+export const RULES_VERSION = 4
 
 export const CONFIG = {
   /** 在这些回合发放锦囊；轮流在红方、黑方走棋前发放（见 draftSide） */
@@ -369,12 +369,10 @@ function doPick(s: GameState, side: Side, augmentId: string) {
   const ds = s.draft?.sides[side]
   if (s.phase !== 'draft' || !ds || ds.done) throw new IllegalActionError('现在不能选择锦囊')
   if (!ds.options.includes(augmentId)) throw new IllegalActionError('不在可选范围内')
-  const owned = { id: augmentId, data: {} }
-  s.augments[side].push(owned)
+  // 双方都选完才揭晓、生效：先选的一方不会把选择暴露给对方（有些锦囊选中就会改变棋盘）
   ds.done = true
   ds.picked = augmentId
-  addLog(s, `${SIDE_NAMES[side]}获得锦囊【${AUGMENTS[augmentId].name}】`, side)
-  AUGMENTS[augmentId].onPick?.(s, side, owned.data)
+  addLog(s, `${SIDE_NAMES[side]}选好了锦囊`, side)
   maybeEndDraft(s)
 }
 
@@ -390,6 +388,15 @@ function doReroll(s: GameState, side: Side) {
 function maybeEndDraft(s: GameState) {
   const d = s.draft
   if (!d || !d.sides.red.done || !d.sides.black.done) return
+  // 同时揭晓：接下来要走棋的一方的锦囊先生效
+  for (const side of [s.turn, other(s.turn)]) {
+    const id = d.sides[side].picked
+    if (!id) continue
+    const owned = { id, data: {} }
+    s.augments[side].push(owned)
+    addLog(s, `${SIDE_NAMES[side]}获得锦囊【${AUGMENTS[id].name}】`, side)
+    AUGMENTS[id].onPick?.(s, side, owned.data)
+  }
   s.draft = null
   s.draftsDone++
   s.phase = 'play'

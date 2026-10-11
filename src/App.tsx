@@ -16,7 +16,7 @@ type Screen =
   /** back：设置页返回到哪里 */
   | { name: 'settings'; back: Screen }
   | { name: 'hotseat'; resume?: boolean }
-  | { name: 'online'; invite: string | null }
+  | { name: 'online'; invite: string | null; host?: string }
   | { name: 'replay-import'; error?: string }
   | { name: 'replay'; replay: LoadedReplay }
 
@@ -24,6 +24,9 @@ type Screen =
 function initialScreen(): Screen {
   const room = /room=(\d{6})/.exec(location.hash)?.[1]
   if (room) return { name: 'online', invite: room }
+  // 房主刷新了页面：恢复房间
+  const host = /host=(\d{6})/.exec(location.hash)?.[1]
+  if (host) return { name: 'online', invite: null, host }
   if (location.hash.includes('replay=')) {
     try {
       return { name: 'replay', replay: parseReplay(location.hash) }
@@ -86,7 +89,7 @@ export default function App() {
       {screen.name === 'eve' && <EveSoon onSettings={settings({ name: 'eve' })} onBack={home} />}
       {screen.name === 'settings' && <LlmSettingsPage onBack={() => setScreen(screen.back)} />}
       {screen.name === 'hotseat' && <HotseatGame onExit={home} resume={screen.resume} />}
-      {screen.name === 'online' && <OnlineGame onExit={home} initialCode={screen.invite} />}
+      {screen.name === 'online' && <OnlineGame onExit={home} initialCode={screen.invite} hostCode={screen.host} />}
       {screen.name === 'replay-import' && (
         <>
           {screen.error && <p className="error-text center">{screen.error}</p>}

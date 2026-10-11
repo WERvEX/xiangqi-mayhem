@@ -53,7 +53,8 @@ export function describeAction(prev: GameState, action: Action, next: GameState)
       break
     }
     case 'pick':
-      text = `选择锦囊「${AUGMENTS[action.augmentId].name}」`
+      // 双方都选完才揭晓，揭晓的内容在 events 里（取自对局日志）
+      text = '选好了锦囊'
       break
     case 'reroll':
       text = '刷新了锦囊选项'

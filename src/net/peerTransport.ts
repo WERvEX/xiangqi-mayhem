@@ -5,6 +5,23 @@ import type { Connection, HostHandle, Route, Transport } from './transport'
 
 const ID_PREFIX = 'xqmayhem-'
 
+/**
+ * 房间号对应的信令 ID。房主每次刷新页面恢复房间都换一"代"：
+ * 旧页面如果没能正常注销（崩溃、被系统杀掉），信令服务器要好几分钟才释放旧 ID，不能等它。
+ * 客人连接时同时尝试几代 ID，谁在线就连谁。玩家看到的房间号不变。
+ */
+const peerId = (code: string, gen: number) => (gen === 0 ? ID_PREFIX + code : `${ID_PREFIX}${code}-${gen}`)
+/** 客人一次同时尝试的代数 */
+const GEN_WINDOW = 6
+
+/** 这个标签页知道的某个房间的最新一代（刷新页面后仍然记得） */
+function knownGen(key: string): number {
+  return Number(sessionStorage.getItem(`xqm-gen-${key}`) ?? 0) || 0
+}
+function rememberGen(key: string, gen: number) {
+  sessionStorage.setItem(`xqm-gen-${key}`, String(gen))
+}
+
 /** 调试用：在控制台执行 localStorage.xqmForceRelay = 1 后刷新，强制只走中转，用来检查中转服务器 */
 const forceRelay = () => {
   try {
@@ -29,6 +46,7 @@ const DEAD_AFTER = 13000
 const loadPeer = () => import('peerjs').then((m) => m.Peer)
 
 const randomCode = () => String(100000 + Math.floor(Math.random() * 900000))
+
 
 function openPeer(PeerCtor: typeof Peer, id?: string): Promise<Peer> {
   return new Promise((resolve, reject) => {
@@ -101,25 +119,72 @@ function wrap(dc: DataConnection, onClosed?: () => void): Connection {
 }
 
 export const peerTransport: Transport = {
-  async host(): Promise<HostHandle> {
+  async host(roomCode?: string): Promise<HostHandle> {
     const PeerCtor = await loadPeer()
-    for (let attempt = 0; ; attempt++) {
-      const code = randomCode()
-      let peer: Peer
+    let peer: Peer | null = null
+    let code = roomCode ?? randomCode()
+    // 恢复房间：从上一代的下一代开始；新建房间：第 0 代
+    let gen = roomCode ? knownGen(`host-${roomCode}`) + 1 : 0
+    for (let attempt = 0; !peer; attempt++) {
       try {
-        peer = await openPeer(PeerCtor, ID_PREFIX + code)
+        peer = await openPeer(PeerCtor, peerId(code, gen))
       } catch (e) {
-        if ((e as PeerError<string>).type === 'unavailable-id' && attempt < 5) continue
-        throw new Error(describe(e))
+        if ((e as PeerError<string>).type !== 'unavailable-id' || attempt >= 5) throw new Error(describe(e))
+        // 新建房间：房间号被占用就换一个；恢复房间：这一代被占用就用下一代
+        if (roomCode) gen++
+        else code = randomCode()
       }
-      return {
-        roomCode: code,
-        onConnection: (cb) =>
-          peer.on('connection', (dc) => {
-            dc.on('open', () => cb(wrap(dc)))
-          }),
-        destroy: () => peer.destroy(),
-      }
+    }
+    rememberGen(`host-${code}`, gen)
+    const id = peerId(code, gen)
+
+    let current: Peer = peer
+    let destroyed = false
+    let onConn: ((conn: Connection) => void) | null = null
+    const listen = (p: Peer) =>
+      p.on('connection', (dc) => {
+        dc.on('open', () => onConn?.(wrap(dc)))
+      })
+    listen(current)
+
+    // 与信令服务器断开（网络切换、切到后台）时不断重连，否则客人连不进来
+    let reviving = false
+    const keepAlive = async () => {
+      if (destroyed || reviving) return
+      if (current.destroyed) {
+        reviving = true
+        try {
+          current = await openPeer(PeerCtor, id)
+          listen(current)
+        } catch {
+          // 下次再试
+        } finally {
+          reviving = false
+        }
+      } else if (current.disconnected) current.reconnect()
+    }
+    const timer = setInterval(() => void keepAlive(), 5000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void keepAlive()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    // 刷新或关闭页面时主动注销房间号。只靠浏览器断开连接的话，信令服务器要一分多钟才释放它，
+    // 房主刷新后就得等这么久才能恢复房间
+    const onPageHide = () => current.destroy()
+    window.addEventListener('pagehide', onPageHide)
+
+    return {
+      roomCode: code,
+      onConnection: (cb) => {
+        onConn = cb
+      },
+      destroy: () => {
+        destroyed = true
+        clearInterval(timer)
+        document.removeEventListener('visibilitychange', onVisible)
+        window.removeEventListener('pagehide', onPageHide)
+        current.destroy()
+      },
     }
   },
 
@@ -131,8 +196,13 @@ export const peerTransport: Transport = {
     } catch (e) {
       throw new Error(describe(e))
     }
+    // 从记得的那一代开始，同时连几代：不存在的 ID 会很快报错，在线的那个会连上
+    const first = knownGen(roomCode)
+    const gens = Array.from({ length: GEN_WINDOW }, (_, i) => first + i)
     return new Promise((resolve, reject) => {
       let settled = false
+      let unavailable = 0
+      const channels: DataConnection[] = []
       const fail = (msg: string) => {
         if (settled) return
         settled = true
@@ -144,14 +214,26 @@ export const peerTransport: Transport = {
         () => fail('连接超时：没能和房主建立连接。可以在联机大厅点「网络检测」，看看是哪一步出了问题'),
         CONNECT_TIMEOUT,
       )
-      peer.on('error', (e) => fail(describe(e)))
-      const dc = peer.connect(ID_PREFIX + roomCode, { reliable: true, serialization: 'json' })
-      dc.on('open', () => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        resolve(wrap(dc, () => peer.destroy()))
+      peer.on('error', (e) => {
+        // 每个不存在的 ID 各报一次；全都不存在才算房间不存在
+        if (e.type === 'peer-unavailable') {
+          if (++unavailable >= gens.length) fail(describe(e))
+          return
+        }
+        fail(describe(e))
       })
+      for (const gen of gens) {
+        const dc = peer.connect(peerId(roomCode, gen), { reliable: true, serialization: 'json' })
+        channels.push(dc)
+        dc.on('open', () => {
+          if (settled) return dc.close()
+          settled = true
+          clearTimeout(timer)
+          rememberGen(roomCode, gen)
+          for (const other of channels) if (other !== dc) other.close()
+          resolve(wrap(dc, () => peer.destroy()))
+        })
+      }
     })
   },
 }

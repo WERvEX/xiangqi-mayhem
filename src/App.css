@@ -1639,3 +1639,75 @@ button.link {
   font-size: 14px;
   line-height: 1.8;
 }
+.draft-secret {
+  text-align: center;
+  margin: 8px 0 0;
+}
+
+/* ───── 对局记录 ───── */
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+  scrollbar-color: #5a4733 transparent;
+}
+.history-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #1d1712;
+  border-radius: 10px;
+  padding: 8px 8px 8px 10px;
+  text-align: left;
+}
+.history-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  align-items: center;
+}
+.history-result {
+  grid-row: span 2;
+  font-weight: bold;
+  width: 2.2em;
+  text-align: center;
+}
+.history-result.win {
+  color: var(--red-soft);
+}
+.history-result.lose {
+  color: var(--muted);
+}
+.history-title,
+.history-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-sub {
+  font-size: 12px;
+}
+.history-actions {
+  display: flex;
+  gap: 4px;
+}
+.history-actions button {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.lobby-card .left {
+  margin: 0;
+}
+.undo-notice {
+  text-align: center;
+  font-size: 13px;
+  color: var(--accent);
+  padding: 4px;
+}

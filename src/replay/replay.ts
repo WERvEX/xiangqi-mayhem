@@ -195,6 +195,13 @@ function load(p: Payload): LoadedReplay {
   }
 }
 
+/** 本局刚结束、直接在本机查看回放时用：不经过编码，直接重放 */
+export function loadReplay(r: Replay): LoadedReplay {
+  const states = [createGame(r.seed)]
+  for (const a of r.actions) states.push(applyAction(states[states.length - 1], a))
+  return { ...r, states, outdated: r.rules !== RULES_VERSION }
+}
+
 /** 支持：完整链接、#replay=… 片段、单独的回放码、回放文件内容 */
 export function parseReplay(input: string): LoadedReplay {
   const text = input.trim()

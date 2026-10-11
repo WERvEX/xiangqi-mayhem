@@ -13,12 +13,13 @@ import {
   type TurnRecord,
 } from '../llm/prompt'
 import { profileLabel, useProfiles } from '../llm/settings'
-import { makeReplay, parseReplay, replayToFile, type LoadedReplay, type Replay, type ReplayNote } from '../replay/replay'
+import { makeReplay, type Replay, type ReplayNote } from '../replay/replay'
 import { Modal } from './common'
 import { GameView } from './GameView'
 import { ProfileEditor } from './LlmSettings'
 import { SideNote } from './Notes'
-import { ReplayShareModal, ReplayView } from './Replay'
+import { ReplayShareModal } from './Replay'
+import { useFinishedGame } from './useFinishedGame'
 import { clearSaved, useAutoSave } from './savedGame'
 import { useLocalGame } from './useLocalGame'
 
@@ -100,8 +101,6 @@ export function LlmMatch({
   /** 规则 AI 接管本局剩下的部分 */
   const [takeover, setTakeover] = useState(resume?.llm?.takeover ?? false)
   const [sharing, setSharing] = useState<Replay | null>(null)
-  /** 对局结束后的复盘（带思考的回放），看完回到对局 */
-  const [review, setReview] = useState<LoadedReplay | null>(null)
   /** 当前任务开始的时间，用于显示"思考中… N 秒" */
   const [timer, setTimer] = useState<{ task: string | null; at: number }>({ task: null, at: 0 })
   const [now, setNow] = useState(() => Date.now())
@@ -313,6 +312,17 @@ export function LlmMatch({
     return () => clearInterval(t)
   }, [busy])
 
+  const name = !profile ? '' : takeover ? `${profile.name}（规则 AI 接管）` : profileLabel(profile)
+  const buildReplay = () => {
+    const replayNotes: ReplayNote[] = liveNotes
+      .filter((n) => n.speech || n.thought || n.fallback)
+      .map(({ i, side, speech, thought, fallback }) => ({ i, side, speech, thought, fallback }))
+      .sort((a, b) => a.i - b.i)
+    return makeReplay(seed, actions, { mode: 'llm', [humanSide]: '玩家', [llmSide]: name }, replayNotes)
+  }
+  // 结束语稍后才到，发言条数变化时重新存进对局记录
+  const finished = useFinishedGame(state, buildReplay, humanSide, liveNotes.length)
+
   if (!profile) {
     return (
       <div className="lobby">
@@ -324,21 +334,12 @@ export function LlmMatch({
     )
   }
 
-  const name = takeover ? `${profile.name}（规则 AI 接管）` : profileLabel(profile)
   const llmNotes = liveNotes.filter((n) => n.side === llmSide)
   const latestNote = llmNotes.reduce<LiveNote | null>((best, n) => (!best || n.i >= best.i ? n : best), null)
   const lastSpeech = [...llmNotes].sort((a, b) => a.i - b.i).findLast((n) => n.speech)
   const fallbacks = llmNotes.filter((n) => n.fallback).length
 
   const humanToMove = (s: GameState) => s.phase === 'play' && s.turn === humanSide
-
-  const buildReplay = () => {
-    const replayNotes: ReplayNote[] = liveNotes
-      .filter((n) => n.speech || n.thought || n.fallback)
-      .map(({ i, side, speech, thought, fallback }) => ({ i, side, speech, thought, fallback }))
-      .sort((a, b) => a.i - b.i)
-    return makeReplay(seed, actions, { mode: 'llm', [humanSide]: '玩家', [llmSide]: name }, replayNotes)
-  }
 
   const banner = (
     <div className={`conn-banner ${busy ? 'warn' : 'ok'}`}>
@@ -366,38 +367,37 @@ export function LlmMatch({
             }
           : null
       }
-      // 对局中思考对玩家隐藏，只在开发模式下显示，便于调提示词
+      // 对局中思考默认隐藏，玩家可以点「偷看思考」
       showThought={showThought}
       thinkingSec={busy ? Math.max(0, Math.round((now - timer.at) / 1000)) : null}
       onSkip={() => skipRef.current?.()}
     />
   )
 
-  if (review) return <ReplayView replay={review} onExit={() => setReview(null)} exitLabel="返回对局" />
-
   return (
     <>
-      <GameView
-        key={seed}
-        state={state}
-        dispatch={dispatch}
-        mySide={humanSide}
-        labels={{ [humanSide]: '（你）', [llmSide]: `（${profile.name}）` }}
-        banner={banner}
-        onExit={onExit}
-        onUndo={canUndo ? () => undo(humanToMove) : undefined}
-        hints
-        onRestart={() => {
-          clearSaved('ai')
-          restart()
-          setNotes([])
-          setUsage(ZERO_USAGE)
-          setTakeover(false)
-          setFatal(null)
-        }}
-        sideNotes={{ [llmSide]: note }}
-        extraControls={
-          <>
+      {finished.reviewView}
+      <div hidden={!!finished.reviewView}>
+        <GameView
+          key={seed}
+          state={state}
+          dispatch={dispatch}
+          mySide={humanSide}
+          labels={{ [humanSide]: '（你）', [llmSide]: `（${profile.name}）` }}
+          banner={banner}
+          onExit={onExit}
+          onUndo={canUndo ? () => undo(humanToMove) : undefined}
+          hints
+          onRestart={() => {
+            clearSaved('ai')
+            restart()
+            setNotes([])
+            setUsage(ZERO_USAGE)
+            setTakeover(false)
+            setFatal(null)
+          }}
+          sideNotes={{ [llmSide]: note }}
+          extraControls={
             <button
               type="button"
               className={showThought ? 'on' : ''}
@@ -406,15 +406,11 @@ export function LlmMatch({
             >
               🧠 {showThought ? '隐藏思考' : over ? '查看思考' : '偷看思考'}
             </button>
-            {over && (
-              <button type="button" onClick={() => setReview(parseReplay(replayToFile(buildReplay())))}>
-                复盘
-              </button>
-            )}
-          </>
-        }
-        onShareReplay={actions.length > 0 ? () => setSharing(buildReplay()) : undefined}
-      />
+          }
+          onShareReplay={actions.length > 0 ? () => setSharing(buildReplay()) : undefined}
+          onWatchReplay={finished.watch}
+        />
+      </div>
 
       {fatal && !editing && (
         <Modal className="confirm">

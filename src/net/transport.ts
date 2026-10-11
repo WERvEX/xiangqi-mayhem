@@ -24,6 +24,7 @@ export interface HostHandle {
 }
 
 export interface Transport {
-  host(): Promise<HostHandle>
+  /** 创建房间；传入房间号时沿用它（房主刷新页面后恢复房间） */
+  host(roomCode?: string): Promise<HostHandle>
   join(roomCode: string): Promise<Connection>
 }
