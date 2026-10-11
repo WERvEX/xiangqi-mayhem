@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { RULES_VERSION } from '../engine'
+import { RULES_VERSION, type Side } from '../engine'
 import {
+  hasNotes,
   parseReplay,
   replayToCode,
   replayToFile,
@@ -11,8 +12,9 @@ import {
 } from '../replay/replay'
 import { GameView } from './GameView'
 import { Modal } from './common'
+import { SideNote } from './Notes'
 
-const MODE_NAMES: Record<ReplayMode, string> = { hotseat: '同屏对战', ai: '人机对战', online: '联机对战' }
+const MODE_NAMES: Record<ReplayMode, string> = { hotseat: '同屏对战', ai: '人机对战', online: '联机对战', llm: '大模型对战' }
 
 const replayLink = (r: Replay) => `${location.origin}${location.pathname}#replay=${replayToCode(r)}`
 
@@ -46,10 +48,18 @@ export function ReplayShareModal({ replay, onClose }: { replay: Replay; onClose:
     download(`象棋大乱斗回放-${stamp}.json`, replayToFile(replay))
   }
 
+  const notes = hasNotes(replay)
   return (
     <Modal onClose={onClose} className="share">
       <h3>分享回放</h3>
-      <p className="muted">链接里包含整局棋（共 {replay.actions.length} 步），对方打开就能观看，不需要服务器。</p>
+      {notes ? (
+        <p className="muted">
+          <b className="accent">大模型的发言和思考只保存在回放文件里</b>，想让朋友看到请发送回放文件。链接里只有棋步（共{' '}
+          {replay.actions.length} 步）。
+        </p>
+      ) : (
+        <p className="muted">链接里包含整局棋（共 {replay.actions.length} 步），对方打开就能观看，不需要服务器。</p>
+      )}
       <div className="invite">
         <input readOnly value={link} onFocus={(e) => e.target.select()} />
         <button type="button" className="primary" onClick={copy}>
@@ -57,7 +67,7 @@ export function ReplayShareModal({ replay, onClose }: { replay: Replay; onClose:
         </button>
       </div>
       <div className="modal-actions">
-        <button type="button" onClick={save}>
+        <button type="button" className={notes ? 'primary' : ''} onClick={save}>
           下载回放文件
         </button>
         <button type="button" onClick={onClose}>
@@ -124,12 +134,23 @@ export function ReplayImport({ onLoad, onBack }: { onLoad: (r: LoadedReplay) => 
 
 const SPEEDS = [0.5, 1, 2, 4]
 
-export function ReplayView({ replay, onExit }: { replay: LoadedReplay; onExit: () => void }) {
+export function ReplayView({
+  replay,
+  onExit,
+  exitLabel,
+}: {
+  replay: LoadedReplay
+  onExit: () => void
+  exitLabel?: string
+}) {
   const last = replay.states.length - 1
   const [step, setStep] = useState(0)
   const [playing, setPlaying] = useState(true)
   const [speed, setSpeed] = useState(1)
   const [sharing, setSharing] = useState(false)
+  const [showSpeech, setShowSpeech] = useState(true)
+  const [showThought, setShowThought] = useState(false)
+  const notes = replay.notes ?? []
 
   // 自动播放；播到最后自然停下
   const isPlaying = playing && step < last
@@ -200,6 +221,16 @@ export function ReplayView({ replay, onExit }: { replay: LoadedReplay; onExit: (
         >
           {speed}×
         </button>
+        {notes.length > 0 && (
+          <>
+            <button type="button" className={showSpeech ? 'on' : ''} onClick={() => setShowSpeech((v) => !v)} title="显示大模型的发言">
+              💬 发言
+            </button>
+            <button type="button" className={showThought ? 'on' : ''} onClick={() => setShowThought((v) => !v)} title="显示大模型的思考">
+              🧠 思考
+            </button>
+          </>
+        )}
       </div>
       <input
         className="replay-scrub"
@@ -215,6 +246,28 @@ export function ReplayView({ replay, onExit }: { replay: LoadedReplay; onExit: (
     </div>
   )
 
+  // 第 step 步时显示的内容：已经发生的操作（序号 < step）对应的发言与思考；结束语在最后一步显示
+  const sidesWithNotes = (['red', 'black'] as Side[]).filter((side) => notes.some((n) => n.side === side))
+  const sideNotes = sidesWithNotes.length
+    ? Object.fromEntries(
+        sidesWithNotes.map((side) => {
+          const seen = notes.filter((n) => n.side === side && (n.i < step || (step === last && n.i === last)))
+          const latest = seen.reduce<(typeof notes)[number] | null>((b, n) => (!b || n.i >= b.i ? n : b), null)
+          const speech = seen.filter((n) => n.speech).at(-1)?.speech
+          return [
+            side,
+            <SideNote
+              key={side}
+              side={side}
+              name={meta[side] ?? ''}
+              note={latest ? { speech: showSpeech ? speech : undefined, thought: latest.thought, fallback: latest.fallback } : null}
+              showThought={showThought}
+            />,
+          ]
+        }),
+      )
+    : undefined
+
   return (
     <>
       <GameView
@@ -226,8 +279,10 @@ export function ReplayView({ replay, onExit }: { replay: LoadedReplay; onExit: (
         labels={labels}
         banner={banner}
         onExit={onExit}
+        exitLabel={exitLabel}
         onRestart={() => {}}
         onShareReplay={() => setSharing(true)}
+        sideNotes={sideNotes}
       />
       {sharing && <ReplayShareModal replay={replay} onClose={() => setSharing(false)} />}
     </>

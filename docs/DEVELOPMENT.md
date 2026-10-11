@@ -11,6 +11,8 @@ npm test         # 单元测试（规则引擎 + 联机会话）
 npm run build    # 类型检查并构建到 dist/
 npm run lint     # oxlint
 npm run sim      # AI 自我对战，统计锦囊强度（见下文）
+npm run llm-match  # 大模型对规则 AI，用于调提示词（见「大模型」）
+npm run llm-proxy  # 本地转发，供不允许网页直连的模型服务商使用
 ```
 
 ## 目录结构
@@ -28,6 +30,14 @@ src/
     bot.ts           # 对弈 AI：搜索、评估、难度与性格、选锦囊
     worker.ts        # 在 Web Worker 中运行 AI
     client.ts        # 主线程调用 AI 的句柄（可取消）
+  llm/               # 大模型对手（不依赖 UI，浏览器和命令行共用）
+    client.ts        # 接入层：Anthropic / OpenAI 兼容接口，fetch 手写，错误分类
+    settings.ts      # 模型配置的本地存储、服务商预设
+    notation.ts      # 给模型看的坐标（UCCI：a–i 列，0–9 行从红方底线数）
+    prompt.ts        # 系统提示词、局面、走法列表、选锦囊与发言的提示词
+    annotate.ts      # 辅助标注：送将、将军、走后可被吃等客观事实
+    parse.ts         # 解析模型回复（JSON、代码块、正则兜底）
+    player.ts        # decide()、comment()：重试与失败处理
   replay/replay.ts   # 回放的编码、解码与序列化
   net/               # 联机
     protocol.ts      # 消息格式与协议版本
@@ -39,11 +49,17 @@ src/
     GameView.tsx     # 通用对局界面（同屏、联机共用）
     Board.tsx        # SVG 棋盘、棋子与特效
     HotseatGame.tsx  # 同屏对战
-    AiGame.tsx       # 人机对战（设置与对局）
+    AiGame.tsx       # 挑战 AI（设置与规则 AI 对局）
+    LlmGame.tsx      # 大模型对局：发言与走棋、兜底、复盘
+    LlmSettings.tsx  # 模型配置界面
+    Notes.tsx        # 大模型的发言气泡与思考
     OnlineGame.tsx   # 联机大厅与房间
     Replay.tsx       # 回放的分享、导入与播放
     useLocalGame.ts  # 本机对局的历史记录（悔棋、回放）
+    savedGame.ts     # 本机对局的自动存档（刷新后继续上一局）
 scripts/simulate.ts  # 自我对战统计
+scripts/llm-match.ts # 大模型对规则 AI（命令行）
+scripts/llm-proxy*.ts # 大模型请求转发（本地工具 + 开发服务器中间件）
 ```
 
 ## 规则引擎
@@ -137,6 +153,26 @@ scripts/simulate.ts  # 自我对战统计
 - 一整局通常只有几百个字符，放进链接的 `#replay=` 后面即可分享，不需要服务器
 - 因为依赖走法生成的顺序，回放记录了 `RULES_VERSION`；版本不同时仍会尝试播放，失败则提示
 
+回放文件可以带上大模型的发言与思考（`notes`，按操作序号对应）。链接放不下这么多文字，所以只有文件里有。
+
+## 大模型
+
+设计和取舍见 [LLM-DESIGN.md](LLM-DESIGN.md)。要点：
+
+- **每步独立请求**，不累积对话：系统提示词（规则 + 全部锦囊）整局不变，可以命中缓存；用户消息放局面、最近几步、带编号的合法走法和模型自己留的备忘。备忘由调用方保存，悔棋时随记录一起撤回
+- **发言与走棋两个请求同时发出**。发言请求里没有走法列表，模型说话时还没决定走哪步，不会剧透
+- 模型只回编号，所以不会走出违规棋。格式不对时带着错误原因重试一次，仍失败返回 `ok: false`，由界面用规则 AI（困难）代走并标出；密钥、余额、网络等错误直接抛出，界面暂停对局让玩家处理
+- 不用官方 SDK：SDK 附带的 `x-stainless-*` 请求头会被很多第三方兼容接口的跨域设置拦截
+- 改了提示词，用 `llm-match` 实际跑几局看合法率、兜底率和棋步质量。模型配置从环境变量读取，密钥不要写进文件：
+
+```bash
+XQM_LLM_PROTOCOL=openai XQM_LLM_BASE=https://api.deepseek.com XQM_LLM_KEY=... XQM_LLM_MODEL=deepseek-chat   npm run llm-match -- --bot beginner --side red --max-steps 40
+```
+
+  可选参数：`--no-annotate`（关辅助标注）、`--no-comment`（不发言）、`--seed`；环境变量 `XQM_LLM_REASONING` 设思考强度。回放（含发言与思考）写到 `.sim/`，可以在网页的「观看回放」里打开
+- **跨域**：开发服务器自带转发 `/__llm_proxy/<目标地址>`，设置界面「高级」里有一键填写按钮；网页版用户运行 `npm run llm-proxy`。转发只接受本机页面和正式站点的请求，只转发到 https 地址
+- 单元测试（`src/llm/llm.test.ts`）用假的 fetch，不调用真实接口
+
 ## 平衡性模拟
 
 `scripts/simulate.ts` 让 AI 互相对战，统计每个锦囊拥有者的得分率（和棋算半分）：
@@ -191,4 +227,4 @@ interface Transport {
 
 推送到 `main` 后，GitHub Actions 会依次运行测试、构建，并发布到 GitHub Pages（`.github/workflows/deploy.yml`）。`vite.config.ts` 中 `base: './'`，所以部署在子路径下也能正常加载。
 
-开发模式下，同屏对战会把 `window.__xq = { state, dispatch }` 暴露给控制台，方便调试；生产构建中不会包含。
+开发模式下，人机对战和大模型对战会把 `window.__xq = { state, dispatch }` 暴露给控制台，方便调试；生产构建中不会包含。

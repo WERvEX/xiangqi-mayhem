@@ -13,7 +13,18 @@ import { applyAction, createGame, legalMoves, RULES_VERSION, type Action, type G
  * 记号之间用 "." 分隔。序号依赖走法生成的顺序，所以回放会记录规则版本。
  */
 
-export type ReplayMode = 'hotseat' | 'ai' | 'online'
+export type ReplayMode = 'hotseat' | 'ai' | 'online' | 'llm'
+
+/** 大模型在某一步的发言与思考，只保存在回放文件里（链接里放不下） */
+export interface ReplayNote {
+  /** 对应的操作序号：发言和思考发生在第 i 个操作之前 */
+  i: number
+  side: Side
+  speech?: string
+  thought?: string
+  /** 这一步模型失败、由程序代走时的原因 */
+  fallback?: string
+}
 
 export interface ReplayMeta {
   mode: ReplayMode
@@ -29,6 +40,7 @@ export interface Replay {
   seed: string
   actions: Action[]
   meta: ReplayMeta
+  notes?: ReplayNote[]
 }
 
 export class ReplayError extends Error {}
@@ -111,6 +123,8 @@ interface Payload {
   seed: string
   a: string
   m: ReplayMeta
+  /** 大模型的发言与思考，只在回放文件里 */
+  n?: ReplayNote[]
 }
 
 const FILE_FORMAT = 'xiangqi-mayhem-replay'
@@ -132,9 +146,19 @@ function toPayload(r: Replay): Payload {
   return { v: 1, rules: r.rules, seed: r.seed, a: encodeActions(r.seed, r.actions), m: r.meta }
 }
 
-export function makeReplay(seed: string, actions: Action[], meta: Omit<ReplayMeta, 'date'>): Replay {
-  return { rules: RULES_VERSION, seed, actions, meta: { ...meta, date: new Date().toISOString() } }
+export function makeReplay(
+  seed: string,
+  actions: Action[],
+  meta: Omit<ReplayMeta, 'date'>,
+  notes?: ReplayNote[],
+): Replay {
+  const r: Replay = { rules: RULES_VERSION, seed, actions, meta: { ...meta, date: new Date().toISOString() } }
+  if (notes?.length) r.notes = notes
+  return r
 }
+
+/** 回放里有链接放不下的内容（大模型的发言与思考），只能用文件分享 */
+export const hasNotes = (r: Replay) => !!r.notes?.length
 
 /** 链接中 #replay= 之后的部分 */
 export function replayToCode(r: Replay): string {
@@ -142,7 +166,9 @@ export function replayToCode(r: Replay): string {
 }
 
 export function replayToFile(r: Replay): string {
-  return JSON.stringify({ format: FILE_FORMAT, ...toPayload(r) }, null, 2)
+  const payload: Payload & { format: string } = { format: FILE_FORMAT, ...toPayload(r) }
+  if (r.notes?.length) payload.n = r.notes
+  return JSON.stringify(payload, null, 2)
 }
 
 export interface LoadedReplay extends Replay {
@@ -151,12 +177,18 @@ export interface LoadedReplay extends Replay {
   outdated: boolean
 }
 
+const isNote = (x: unknown): x is ReplayNote => {
+  const n = x as ReplayNote
+  return !!n && typeof n.i === 'number' && (n.side === 'red' || n.side === 'black')
+}
+
 function load(p: Payload): LoadedReplay {
   if (p.v !== 1 || typeof p.seed !== 'string' || typeof p.a !== 'string') throw new ReplayError('无法识别的回放格式')
   const outdated = p.rules !== RULES_VERSION
   try {
     const { actions, states } = decodeActions(p.seed, p.a)
-    return { rules: p.rules, seed: p.seed, actions, states, meta: p.m, outdated }
+    const notes = Array.isArray(p.n) ? p.n.filter(isNote) : undefined
+    return { rules: p.rules, seed: p.seed, actions, states, meta: p.m, outdated, notes }
   } catch (e) {
     if (outdated) throw new ReplayError(`这个回放来自旧版本规则（v${p.rules}，当前 v${RULES_VERSION}），已无法播放`)
     throw e

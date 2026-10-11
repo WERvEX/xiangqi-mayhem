@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "sim": "esbuild scripts/simulate.ts --bundle --platform=node --format=esm --outfile=.sim/simulate.mjs --log-level=warning && node .sim/simulate.mjs",
-    "docs:augments": "tsx scripts/augment-table.ts"
+    "docs:augments": "tsx scripts/augment-table.ts",
+    "llm-match": "esbuild scripts/llm-match.ts --bundle --platform=node --format=esm --outfile=.sim/llm-match.mjs --log-level=warning && node .sim/llm-match.mjs",
+    "llm-proxy": "tsx scripts/llm-proxy.ts"
   },
   "dependencies": {
     "peerjs": "^1.5.5",

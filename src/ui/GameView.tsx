@@ -33,6 +33,8 @@ export interface GameViewProps {
   /** 联机时为自己执子的一方；同屏对战为 null，双方都由本机操作 */
   mySide: Side | null
   onExit: () => void
+  /** 退出按钮的文字，默认"主页" */
+  exitLabel?: string
   /** 只有同屏对战提供悔棋 */
   onUndo?: () => void
   onRestart: () => void
@@ -50,6 +52,8 @@ export interface GameViewProps {
   onShareReplay?: () => void
   /** 是否提供 AI 走法推荐（联机和回放中关闭） */
   hints?: boolean
+  /** 大模型的发言等：宽屏时显示在棋盘两侧，窄屏时显示在对应一方的信息栏旁 */
+  sideNotes?: Partial<Record<Side, ReactNode>>
 }
 
 /** 对局界面。新开一局时请用 key 重新挂载，以重置界面状态。 */
@@ -58,6 +62,7 @@ export function GameView({
   dispatch,
   mySide,
   onExit,
+  exitLabel = '主页',
   onUndo,
   onRestart,
   restartLabel = '再来一局',
@@ -68,6 +73,7 @@ export function GameView({
   extraControls,
   onShareReplay,
   hints = false,
+  sideNotes,
 }: GameViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [flipped, setFlipped] = useState(mySide === 'black')
@@ -189,10 +195,14 @@ export function GameView({
     else overTitle = state.winner === mySide ? '你赢了！' : '你输了'
   }
 
-  return (
+  const topNote = sideNotes?.[topSide]
+  const bottomNote = sideNotes?.[other(topSide)]
+
+  const game = (
     <div className="game">
       {banner}
       <PlayerPanel state={state} side={topSide} mySide={mySide} label={labels?.[topSide]} onInfo={setInfoId} />
+      {topNote && <div className="notes-inline">{topNote}</div>}
 
       <div className="board-wrap">
         <Board
@@ -216,6 +226,7 @@ export function GameView({
         label={labels?.[other(topSide)]}
         onInfo={setInfoId}
       />
+      {bottomNote && <div className="notes-inline">{bottomNote}</div>}
 
       <div className="status-bar">
         <span>{statusText}</span>
@@ -292,7 +303,7 @@ export function GameView({
           </button>
         )}
         <button type="button" onClick={onExit}>
-          主页
+          {exitLabel}
         </button>
         {draftSide && draftHidden && (
           <button type="button" className="primary" onClick={() => setDraftHidden(false)}>
@@ -391,6 +402,15 @@ export function GameView({
           </div>
         </Modal>
       )}
+    </div>
+  )
+
+  if (!sideNotes) return game
+  return (
+    <div className="game-layout">
+      <aside className="notes-aside">{topNote}</aside>
+      {game}
+      <aside className="notes-aside">{bottomNote}</aside>
     </div>
   )
 }

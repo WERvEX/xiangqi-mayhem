@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { applyAction, createGame, randomSeed, type Action, type GameState } from '../engine'
+import { replayStates } from './savedGame'
 
 interface History {
   /** states[i + 1] = applyAction(states[i], actions[i]) */
@@ -9,9 +10,18 @@ interface History {
 
 const fresh = (): History => ({ states: [createGame(randomSeed())], actions: [] })
 
-/** 本机对局（同屏、人机）的状态：完整历史，用于悔棋和生成回放 */
-export function useLocalGame() {
-  const [h, setH] = useState<History>(fresh)
+/** 从存档恢复；存档损坏时开新局 */
+function restored(initial: { seed: string; actions: Action[] }): History {
+  const states = replayStates(initial.seed, initial.actions)
+  return states ? { states, actions: initial.actions } : fresh()
+}
+
+/**
+ * 本机对局（同屏、人机）的状态：完整历史，用于悔棋和生成回放。
+ * initial：从存档恢复的对局（只在第一次渲染时读取）
+ */
+export function useLocalGame(initial?: { seed: string; actions: Action[] } | null) {
+  const [h, setH] = useState<History>(() => (initial ? restored(initial) : fresh()))
   const state = h.states[h.states.length - 1]
 
   const dispatch = useCallback((action: Action) => {
@@ -42,5 +52,14 @@ export function useLocalGame() {
 
   const restart = useCallback(() => setH(fresh()), [])
 
-  return { state, seed: h.states[0].seed, actions: h.actions, canUndo: h.actions.length > 0, dispatch, undo, restart }
+  return {
+    state,
+    states: h.states,
+    seed: h.states[0].seed,
+    actions: h.actions,
+    canUndo: h.actions.length > 0,
+    dispatch,
+    undo,
+    restart,
+  }
 }

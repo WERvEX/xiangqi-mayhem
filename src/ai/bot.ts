@@ -407,6 +407,113 @@ function search(state: GameState, p: SearchParams): Move {
   return best
 }
 
+export interface MoveScore {
+  move: Move
+  /** 走这步之后的局面分（走子方视角，大致以子力为单位） */
+  score: number
+  /** 能强制吃掉对方将帅 */
+  win: boolean
+  /** 走完之后会被强制吃将 */
+  loss: boolean
+}
+
+/**
+ * 给当前行动方的每个走法打分，供大模型的战术标注使用。
+ * 根节点不剪枝，保证每个走法的分数都是准确的；时间到了就用上一层算完的结果。
+ */
+export function scoreMoves(
+  state: GameState,
+  opts: { maxDepth?: number; timeMs?: number } = {},
+  /** 可选：输出实际算完的层数 */
+  info?: { depth: number },
+): MoveScore[] {
+  if (state.phase !== 'play') return []
+  const s = new Searcher({
+    maxDepth: opts.maxDepth ?? 4,
+    timeMs: opts.timeMs ?? 1500,
+    quiescence: true,
+    noise: 0,
+    weights: NEUTRAL,
+    evaluate: EVALUATORS[3],
+    rng: Math.random,
+  })
+  const me = state.turn
+  let rootMoves = s.order(state, searchMoves(state), undefined, 0)
+  let result: [number, Move][] = []
+  for (let depth = 1; depth <= (opts.maxDepth ?? 4); depth++) {
+    const scored: [number, Move][] = []
+    for (const m of rootMoves) {
+      const score = s.childScore(me, applyTrustedMove(state, m), depth - 1, -Infinity, Infinity, 1)
+      if (s.aborted) break
+      scored.push([score, m])
+    }
+    // 第一层没算完时也先用着（没算到的走法不打标注）
+    if (!s.aborted || result.length === 0) {
+      result = scored
+      if (info) info.depth = s.aborted ? depth - 1 : depth
+    }
+    if (s.aborted) break
+    const rank = new Map(scored.map(([sc, m]) => [m, sc]))
+    rootMoves = [...rootMoves].sort((a, b) => rank.get(b)! - rank.get(a)!)
+  }
+  return result.map(([score, move]) => {
+    // 评估在叶子节点发现"轮到的一方能吃将"时返回 ±WIN/2，所以边界本身也算
+    let win = score >= WIN / 2
+    let loss = score <= -WIN / 2
+    // 搜索时间有限，可能只算到 3 层，看不到"对方将一军、怎么应都会被吃将"。
+    // 用专门的两步杀检查补上：只展开将军的走法，很便宜
+    if (!win && !loss) {
+      const child = applyTrustedMove(state, move)
+      if (child.phase === 'play') {
+        if (child.turn === me) win = kingCapturable(child, me)
+        else if (kingCapturable(child, me) && noEscape(child, me)) win = true
+        else loss = mateThreat(child, other(me))
+      }
+    }
+    return { move, score, win, loss }
+  })
+}
+
+/** attacker 现在能直接吃掉对方将帅（不会被护盾或锦囊挡下） */
+function kingCapturable(state: GameState, attacker: Side): boolean {
+  const king = findKing(state, other(attacker))
+  if (!king || isProtected(state, king)) return false
+  return sideMoves(state, attacker).moves.some((m) => m.captureId === king.id)
+}
+
+/** 轮到防守方走：不管怎么走，attacker 都能吃将 */
+function noEscape(state: GameState, attacker: Side): boolean {
+  const defender = other(attacker)
+  for (const r of searchMoves(state)) {
+    const a = applyTrustedMove(state, r)
+    if (a.phase === 'over') {
+      if (a.winner !== attacker) return false
+      continue
+    }
+    // 进入锦囊选择或者自己还有额外行动：情况复杂，保守地算作能逃
+    if (a.phase !== 'play' || a.turn === defender || !kingCapturable(a, attacker)) return false
+  }
+  return true
+}
+
+/** 轮到 attacker 走：能不能走一步将军，让对方怎么应都会被吃将（含直接吃将） */
+function mateThreat(state: GameState, attacker: Side): boolean {
+  for (const o of searchMoves(state)) {
+    const c = applyTrustedMove(state, o)
+    if (c.phase === 'over') {
+      if (c.winner === attacker) return true
+      continue
+    }
+    if (c.phase !== 'play') continue
+    if (c.turn === attacker) {
+      if (kingCapturable(c, attacker)) return true
+      continue
+    }
+    if (kingCapturable(c, attacker) && noEscape(c, attacker)) return true
+  }
+  return false
+}
+
 const moveKey = (m: Move) => `${m.pieceId}>${m.to.x}${m.to.y}`
 const ttKey = (s: GameState) => `${positionKey(s)}|${s.extraMoves.length}`
 

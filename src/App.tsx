@@ -2,15 +2,20 @@ import { useEffect, useState } from 'react'
 import { parseReplay, ReplayError, type LoadedReplay } from './replay/replay'
 import { AiGame } from './ui/AiGame'
 import { HotseatGame } from './ui/HotseatGame'
-import { Home } from './ui/Home'
+import { EveSoon, Home, PvpMenu } from './ui/Home'
+import { LlmSettingsPage } from './ui/LlmSettings'
 import { OnlineGame } from './ui/OnlineGame'
 import { ReplayImport, ReplayView } from './ui/Replay'
 import './App.css'
 
 type Screen =
   | { name: 'home' }
-  | { name: 'hotseat' }
-  | { name: 'ai' }
+  | { name: 'pvp' }
+  | { name: 'pve'; opponent?: 'rule' | 'llm'; resume?: boolean }
+  | { name: 'eve' }
+  /** back：设置页返回到哪里 */
+  | { name: 'settings'; back: Screen }
+  | { name: 'hotseat'; resume?: boolean }
   | { name: 'online'; invite: string | null }
   | { name: 'replay-import'; error?: string }
   | { name: 'replay'; replay: LoadedReplay }
@@ -49,19 +54,38 @@ export default function App() {
     clearHash()
     setScreen({ name: 'home' })
   }
+  const settings = (back: Screen) => () => setScreen({ name: 'settings', back })
 
   return (
     <main className="app">
       {screen.name === 'home' && (
         <Home
-          onHotseat={() => setScreen({ name: 'hotseat' })}
-          onAi={() => setScreen({ name: 'ai' })}
-          onOnline={() => setScreen({ name: 'online', invite: null })}
+          onPvp={() => setScreen({ name: 'pvp' })}
+          onPve={() => setScreen({ name: 'pve' })}
+          onEve={() => setScreen({ name: 'eve' })}
           onReplay={() => setScreen({ name: 'replay-import' })}
+          onSettings={settings({ name: 'home' })}
+          onResume={(slot) => setScreen(slot === 'ai' ? { name: 'pve', resume: true } : { name: 'hotseat', resume: true })}
         />
       )}
-      {screen.name === 'hotseat' && <HotseatGame onExit={home} />}
-      {screen.name === 'ai' && <AiGame onExit={home} />}
+      {screen.name === 'pvp' && (
+        <PvpMenu
+          onOnline={() => setScreen({ name: 'online', invite: null })}
+          onHotseat={() => setScreen({ name: 'hotseat' })}
+          onBack={home}
+        />
+      )}
+      {screen.name === 'pve' && (
+        <AiGame
+          initialOpponent={screen.opponent}
+          resume={screen.resume}
+          onExit={home}
+          onOpenSettings={settings({ name: 'pve', opponent: 'llm' })}
+        />
+      )}
+      {screen.name === 'eve' && <EveSoon onSettings={settings({ name: 'eve' })} onBack={home} />}
+      {screen.name === 'settings' && <LlmSettingsPage onBack={() => setScreen(screen.back)} />}
+      {screen.name === 'hotseat' && <HotseatGame onExit={home} resume={screen.resume} />}
       {screen.name === 'online' && <OnlineGame onExit={home} initialCode={screen.invite} />}
       {screen.name === 'replay-import' && (
         <>
