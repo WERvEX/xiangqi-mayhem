@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { parseReplay, ReplayError, type LoadedReplay } from './replay/replay'
 import { AiGame } from './ui/AiGame'
 import { HotseatGame } from './ui/HotseatGame'
-import { EveSoon, Home, PvpMenu } from './ui/Home'
+import { EveGame } from './ui/EveGame'
+import { Home, PvpMenu } from './ui/Home'
 import { LlmSettingsPage } from './ui/LlmSettings'
 import { OnlineGame } from './ui/OnlineGame'
 import { ReplayImport, ReplayView } from './ui/Replay'
@@ -12,7 +13,7 @@ type Screen =
   | { name: 'home' }
   | { name: 'pvp' }
   | { name: 'pve'; opponent?: 'rule' | 'llm'; resume?: boolean }
-  | { name: 'eve' }
+  | { name: 'eve'; resume?: boolean }
   /** back：设置页返回到哪里 */
   | { name: 'settings'; back: Screen }
   | { name: 'hotseat'; resume?: boolean }
@@ -68,7 +69,15 @@ export default function App() {
           onEve={() => setScreen({ name: 'eve' })}
           onReplay={() => setScreen({ name: 'replay-import' })}
           onSettings={settings({ name: 'home' })}
-          onResume={(slot) => setScreen(slot === 'ai' ? { name: 'pve', resume: true } : { name: 'hotseat', resume: true })}
+          onResume={(slot) =>
+            setScreen(
+              slot === 'ai'
+                ? { name: 'pve', resume: true }
+                : slot === 'eve'
+                  ? { name: 'eve', resume: true }
+                  : { name: 'hotseat', resume: true },
+            )
+          }
         />
       )}
       {screen.name === 'pvp' && (
@@ -86,7 +95,9 @@ export default function App() {
           onOpenSettings={settings({ name: 'pve', opponent: 'llm' })}
         />
       )}
-      {screen.name === 'eve' && <EveSoon onSettings={settings({ name: 'eve' })} onBack={home} />}
+      {screen.name === 'eve' && (
+        <EveGame onExit={home} onOpenSettings={settings({ name: 'eve' })} resume={screen.resume} />
+      )}
       {screen.name === 'settings' && <LlmSettingsPage onBack={() => setScreen(screen.back)} />}
       {screen.name === 'hotseat' && <HotseatGame onExit={home} resume={screen.resume} />}
       {screen.name === 'online' && <OnlineGame onExit={home} initialCode={screen.invite} hostCode={screen.host} />}

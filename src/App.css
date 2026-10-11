@@ -1711,3 +1711,157 @@ button.link {
   color: var(--accent);
   padding: 4px;
 }
+
+/* ───── 模型斗蛐蛐 ───── */
+.eve-side h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
+.eve-side.red {
+  border-top: 3px solid var(--red);
+}
+.eve-side.black {
+  border-top: 3px solid #9a9a9a;
+}
+.field-row {
+  display: grid;
+  grid-template-columns: 3em 1fr;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  font-size: 14px;
+}
+.field-row > span {
+  color: var(--muted);
+}
+.field-row select,
+.field-row .segmented {
+  min-width: 0;
+}
+.eve-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.eve-usage {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 12px;
+}
+.eve-usage .side-dot {
+  margin-right: 4px;
+}
+.field-row.top {
+  align-items: start;
+}
+.field-row.top > span {
+  padding-top: 6px;
+}
+.segmented.small button {
+  padding: 5px 4px;
+  font-size: 13px;
+}
+.field-row .field-note {
+  margin: 4px 0 0;
+}
+
+/* ───── 对话列表：最新的在最上面，旧的往下推、逐渐淡出 ───── */
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent);
+  mask-image: linear-gradient(to bottom, #000 75%, transparent);
+}
+.chat-list .speech-bubble {
+  flex-shrink: 0;
+  transition: opacity 0.3s;
+}
+.chat-list .speech-bubble.old {
+  font-size: 13px;
+  animation: none;
+}
+.chat-list .speech-bubble.old::before {
+  display: none;
+}
+.chat-list .speech-bubble.latest {
+  animation: chat-in 0.35s cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+@keyframes chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+.speech-round {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #8a7a64;
+}
+/* 宽屏：两侧对话框和中间的对局区域一样高，只在底部一小段渐隐 */
+@media (min-width: 1000px) {
+  .game-layout {
+    align-items: stretch;
+  }
+  .notes-aside {
+    position: static;
+    display: flex;
+    flex-direction: column;
+  }
+  .notes-aside .side-note {
+    flex: 1;
+    min-height: 0;
+  }
+  .notes-aside .chat-list {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    -webkit-mask-image: linear-gradient(to bottom, #000 85%, transparent);
+    mask-image: linear-gradient(to bottom, #000 85%, transparent);
+  }
+}
+
+/* ───── 实时思维链、系统消息 ───── */
+.live-thought {
+  flex-shrink: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-color: #5a4733 transparent;
+  background: #1d1712;
+  border: 1px dashed #5a4733;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.live-reasoning {
+  color: #a8977f;
+}
+.live-answer {
+  margin-top: 6px;
+  color: var(--text);
+  font-family: ui-monospace, Consolas, monospace;
+}
+.chat-system {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ffb36b;
+  background: rgba(255, 179, 107, 0.08);
+  border-left: 3px solid #ffb36b;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+@media (min-width: 1000px) {
+  .notes-aside .live-thought {
+    max-height: 40%;
+  }
+}

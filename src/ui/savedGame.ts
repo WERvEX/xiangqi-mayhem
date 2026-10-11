@@ -7,7 +7,7 @@ import { applyAction, createGame, roundOf, RULES_VERSION, type Action, type Game
  * 对局结束后自动删除。
  */
 
-export type SaveSlot = 'ai' | 'hotseat'
+export type SaveSlot = 'ai' | 'hotseat' | 'eve'
 
 export interface SavedGame<E = unknown> {
   v: 1

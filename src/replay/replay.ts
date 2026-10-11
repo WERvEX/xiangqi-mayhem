@@ -13,7 +13,7 @@ import { applyAction, createGame, legalMoves, RULES_VERSION, type Action, type G
  * 记号之间用 "." 分隔。序号依赖走法生成的顺序，所以回放会记录规则版本。
  */
 
-export type ReplayMode = 'hotseat' | 'ai' | 'online' | 'llm'
+export type ReplayMode = 'hotseat' | 'ai' | 'online' | 'llm' | 'eve'
 
 /** 大模型在某一步的发言与思考，只保存在回放文件里（链接里放不下） */
 export interface ReplayNote {
@@ -24,6 +24,8 @@ export interface ReplayNote {
   thought?: string
   /** 这一步模型失败、由程序代走时的原因 */
   fallback?: string
+  /** 代走的是哪一步，如"炮 h2→e2" */
+  fallbackMove?: string
 }
 
 export interface ReplayMeta {

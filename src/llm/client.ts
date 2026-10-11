@@ -35,6 +35,8 @@ export interface LlmRequest {
   /** 希望返回 JSON。OpenAI 兼容接口会尝试开启 JSON 模式 */
   json?: boolean
   signal?: AbortSignal
+  /** 提供时用流式输出：模型边想边返回，每收到一段就回调一次（参数是到目前为止的全部内容） */
+  onDelta?: (so: { reasoning: string; text: string }) => void
 }
 
 export interface Usage {
@@ -134,26 +136,31 @@ function parseExtra(p: LlmProfile): Record<string, unknown> {
 }
 
 /**
- * OpenAI 兼容接口关闭思考的参数各家不统一（标准的 reasoning_effort 很多家不认），按地址选择；
- * 不认识的地址把两种最常见的写法都带上。服务商不接受时会自动去掉并记住。
+ * 「关闭思考」的参数各家、甚至同一家的不同模型都不一样。实测火山方舟上 DeepSeek 认 `thinking: disabled`，
+ * GLM 不认、只认 `reasoning_effort: minimal`（而 DeepSeek 对 minimal 照样思考）。
+ * 所以按地址给出几种候选写法，从第一种开始试；服务商返回参数错误就换下一种，并记住对这个模型有效的写法。
  */
-export function thinkingOffParams(baseUrl: string): Record<string, unknown> {
+export function thinkingOffCandidates(p: Pick<LlmProfile, 'protocol' | 'baseUrl'>): Record<string, unknown>[] {
+  if (p.protocol === 'anthropic') return [{ thinking: { type: 'disabled' } }]
   let host = ''
   try {
-    host = new URL(baseUrl.trim()).hostname
+    host = new URL(p.baseUrl.trim()).hostname
   } catch {
     // 地址不合法，下面按"不认识"处理
   }
-  if (/volces\.com|bigmodel\.cn|deepseek\.com|z\.ai/.test(host)) return { thinking: { type: 'disabled' } }
-  if (/aliyuncs\.com|siliconflow/.test(host)) return { enable_thinking: false }
-  if (/openrouter\.ai/.test(host)) return { reasoning: { enabled: false } }
-  if (/openai\.com|googleapis\.com/.test(host)) return { reasoning_effort: 'none' }
-  return { thinking: { type: 'disabled' }, enable_thinking: false }
+  if (/volces\.com|bigmodel\.cn|deepseek\.com|z\.ai/.test(host)) {
+    return [{ thinking: { type: 'disabled' } }, { reasoning_effort: 'minimal' }]
+  }
+  if (/aliyuncs\.com|siliconflow/.test(host)) return [{ enable_thinking: false }]
+  if (/openrouter\.ai/.test(host)) return [{ reasoning: { enabled: false } }]
+  if (/openai\.com|googleapis\.com/.test(host)) return [{ reasoning_effort: 'none' }, { reasoning_effort: 'minimal' }]
+  return [{ thinking: { type: 'disabled' } }, { enable_thinking: false }, { reasoning_effort: 'minimal' }]
 }
 
 interface BodyFlags {
   json: boolean
-  thinkingOff: boolean
+  /** 关闭思考用的参数；没选「关闭」或者所有写法都不被接受时为 null */
+  off: Record<string, unknown> | null
 }
 
 function buildBody(p: LlmProfile, req: LlmRequest, flags: BodyFlags): Record<string, unknown> {
@@ -165,8 +172,8 @@ function buildBody(p: LlmProfile, req: LlmRequest, flags: BodyFlags): Record<str
       system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: req.user }],
     }
-    if (p.reasoning === 'off') body.thinking = { type: 'disabled' }
-    else if (p.reasoning !== 'default') {
+    if (flags.off) Object.assign(body, flags.off)
+    else if (p.reasoning !== 'default' && p.reasoning !== 'off') {
       const budget = THINKING_BUDGET[p.reasoning]
       body.thinking = { type: 'enabled', budget_tokens: budget }
       body.max_tokens = req.maxTokens + budget
@@ -182,7 +189,7 @@ function buildBody(p: LlmProfile, req: LlmRequest, flags: BodyFlags): Record<str
     ],
   }
   if (flags.json) body.response_format = { type: 'json_object' }
-  if (flags.thinkingOff) Object.assign(body, thinkingOffParams(p.baseUrl))
+  if (flags.off) Object.assign(body, flags.off)
   if (p.reasoning === 'low' || p.reasoning === 'medium' || p.reasoning === 'high') {
     body.reasoning_effort = p.reasoning
     // 推理模型的 max_tokens 包含推理部分，留足余量
@@ -219,8 +226,14 @@ function errorMessage(data: unknown, fallback: string): string {
   return fallback
 }
 
-/** 发请求并处理超时、取消、HTTP 错误 */
-async function send(p: LlmProfile, url: string, init: RequestInit, signal?: AbortSignal): Promise<unknown> {
+/** 发请求并处理超时、取消、HTTP 错误；正常的响应交给 read 读取（普通 JSON，或者流式输出） */
+async function send<T = unknown>(
+  p: LlmProfile,
+  url: string,
+  init: RequestInit,
+  signal?: AbortSignal,
+  read?: (res: Response) => Promise<T>,
+): Promise<T> {
   const ctl = new AbortController()
   const timeout = (p.timeoutSec ?? 120) * 1000
   let timedOut = false
@@ -230,38 +243,124 @@ async function send(p: LlmProfile, url: string, init: RequestInit, signal?: Abor
   }, timeout)
   const onAbort = () => ctl.abort()
   signal?.addEventListener('abort', onAbort)
+  const aborted = () => {
+    if (signal?.aborted) return new LlmError('aborted', ERROR_HINTS.aborted)
+    if (timedOut) return new LlmError('timeout', `${ERROR_HINTS.timeout}（${timeout / 1000} 秒）`)
+    return null
+  }
   try {
     let res: Response
     try {
       res = await fetch(url, { ...init, signal: ctl.signal })
     } catch {
-      if (signal?.aborted) throw new LlmError('aborted', ERROR_HINTS.aborted)
-      if (timedOut) throw new LlmError('timeout', `${ERROR_HINTS.timeout}（${timeout / 1000} 秒）`)
-      throw new LlmError('network', ERROR_HINTS.network)
-    }
-    const text = await res.text().catch(() => '')
-    let data: unknown = null
-    try {
-      data = text ? JSON.parse(text) : null
-    } catch {
-      // 非 JSON 响应
+      throw aborted() ?? new LlmError('network', ERROR_HINTS.network)
     }
     if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      let data: unknown = null
+      try {
+        data = text ? JSON.parse(text) : null
+      } catch {
+        // 非 JSON 响应
+      }
       const msg = errorMessage(data, text.slice(0, 300) || res.statusText)
       const retry = Number(res.headers.get('retry-after'))
       throw new LlmError(classify(res.status, msg), `HTTP ${res.status}：${msg}`, res.status, retry > 0 ? retry : undefined)
     }
-    if (data === null) throw new LlmError('server', `服务商返回的不是 JSON：${text.slice(0, 200)}`)
-    return data
+    if (read) return await read(res)
+    const text = await res.text().catch(() => '')
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      throw new LlmError('server', `服务商返回的不是 JSON：${text.slice(0, 200)}`)
+    }
   } catch (e) {
     if (e instanceof LlmError) throw e
-    if (signal?.aborted) throw new LlmError('aborted', ERROR_HINTS.aborted)
-    if (timedOut) throw new LlmError('timeout', ERROR_HINTS.timeout)
-    throw new LlmError('network', String(e))
+    throw aborted() ?? new LlmError('network', String(e))
   } finally {
     clearTimeout(timer)
     signal?.removeEventListener('abort', onAbort)
   }
+}
+
+/** 逐条读出 SSE（服务器推送）流里的 data 内容 */
+async function* sseData(res: Response): AsyncGenerator<string> {
+  if (!res.body) return
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    buffer += done ? decoder.decode() : decoder.decode(value, { stream: true })
+    const events = buffer.split(/\r?\n\r?\n/)
+    buffer = done ? '' : events.pop()!
+    for (const ev of events) {
+      const data = ev
+        .split(/\r?\n/)
+        .filter((l) => l.startsWith('data:'))
+        .map((l) => l.slice(5).trimStart())
+        .join('\n')
+      if (data) yield data
+    }
+    if (done) return
+  }
+}
+
+/** 读取流式输出，边读边回调；读完拼成和普通响应一样的结果 */
+async function readStream(p: LlmProfile, res: Response, onDelta: NonNullable<LlmRequest['onDelta']>): Promise<LlmResponse> {
+  const out: LlmResponse = { text: '', reasoning: '', usage: { input: 0, output: 0, cached: 0 }, truncated: false }
+  for await (const data of sseData(res)) {
+    if (data === '[DONE]') break
+    let ev: Record<string, unknown>
+    try {
+      ev = JSON.parse(data)
+    } catch {
+      continue
+    }
+    let changed = false
+    if (p.protocol === 'anthropic') {
+      const e = ev as {
+        type?: string
+        delta?: { type?: string; text?: string; thinking?: string; stop_reason?: string }
+        message?: { usage?: AnthropicReply['usage'] }
+        usage?: { output_tokens?: number }
+        error?: { message?: string }
+      }
+      if (e.type === 'error') throw new LlmError('server', e.error?.message ?? '流式输出出错')
+      if (e.type === 'message_start') {
+        const u = e.message?.usage
+        out.usage.cached = u?.cache_read_input_tokens ?? 0
+        out.usage.input = (u?.input_tokens ?? 0) + out.usage.cached
+      } else if (e.type === 'content_block_delta') {
+        if (e.delta?.type === 'thinking_delta' && e.delta.thinking) out.reasoning += e.delta.thinking
+        if (e.delta?.type === 'text_delta' && e.delta.text) out.text += e.delta.text
+        changed = true
+      } else if (e.type === 'message_delta') {
+        if (e.usage?.output_tokens) out.usage.output = e.usage.output_tokens
+        if (e.delta?.stop_reason === 'max_tokens') out.truncated = true
+      }
+    } else {
+      const e = ev as {
+        choices?: { delta?: { content?: string | null; reasoning_content?: string; reasoning?: string }; finish_reason?: string }[]
+        usage?: OpenAiReply['usage']
+      }
+      const c = e.choices?.[0]
+      const reasoning = c?.delta?.reasoning_content ?? c?.delta?.reasoning
+      if (reasoning) out.reasoning += reasoning
+      if (c?.delta?.content) out.text += c.delta.content
+      if (reasoning || c?.delta?.content) changed = true
+      if (c?.finish_reason === 'length') out.truncated = true
+      if (e.usage) {
+        out.usage = {
+          input: e.usage.prompt_tokens ?? 0,
+          output: e.usage.completion_tokens ?? 0,
+          cached: e.usage.prompt_tokens_details?.cached_tokens ?? 0,
+        }
+      }
+    }
+    if (changed) onDelta({ reasoning: out.reasoning, text: out.text })
+  }
+  return out
 }
 
 interface AnthropicReply {
@@ -277,22 +376,20 @@ interface OpenAiReply {
 
 /** 不支持 JSON 模式的配置（按地址 + 模型记住，避免每次都先失败一次） */
 const noJsonMode = new Set<string>()
-/** 不接受关闭思考参数的配置 */
-const noThinkingOff = new Set<string>()
+/** 不支持流式输出的配置：退回普通请求 */
+const noStream = new Set<string>()
+/** 关闭思考用第几种写法（见 thinkingOffCandidates）；等于候选数量表示都不被接受 */
+const offChoice = new Map<string, number>()
 
-const configKey = (p: LlmProfile) => `${p.baseUrl}|${p.model}`
+const configKey = (p: LlmProfile) => `${p.protocol}|${p.baseUrl}|${p.model}`
 
-/** 这个配置选了「关闭思考」，但服务商不接受对应的参数（已自动去掉） */
-export const thinkingOffRejected = (p: LlmProfile) => p.reasoning === 'off' && noThinkingOff.has(configKey(p))
+/** 这个配置选了「关闭思考」，但服务商不接受任何一种写法（已自动去掉，模型会照常思考） */
+export const thinkingOffRejected = (p: LlmProfile) =>
+  p.reasoning === 'off' && (offChoice.get(configKey(p)) ?? 0) >= thinkingOffCandidates(p).length
 
-export async function complete(p: LlmProfile, req: LlmRequest): Promise<LlmResponse> {
+function parseReply(p: LlmProfile, raw: unknown): LlmResponse {
   if (p.protocol === 'anthropic') {
-    const data = (await send(
-      p,
-      endpoint(p, '/messages'),
-      { method: 'POST', headers: headers(p), body: JSON.stringify(buildBody(p, req, { json: false, thinkingOff: false })) },
-      req.signal,
-    )) as AnthropicReply
+    const data = raw as AnthropicReply
     const blocks = data.content ?? []
     return {
       text: blocks
@@ -311,28 +408,7 @@ export async function complete(p: LlmProfile, req: LlmRequest): Promise<LlmRespo
       truncated: data.stop_reason === 'max_tokens',
     }
   }
-
-  const key = configKey(p)
-  const useJson = !!req.json && !noJsonMode.has(key)
-  const useOff = p.reasoning === 'off' && !noThinkingOff.has(key)
-  let data: OpenAiReply
-  try {
-    data = (await send(
-      p,
-      endpoint(p, '/chat/completions'),
-      { method: 'POST', headers: headers(p), body: JSON.stringify(buildBody(p, req, { json: useJson, thinkingOff: useOff })) },
-      req.signal,
-    )) as OpenAiReply
-  } catch (e) {
-    // JSON 模式或关闭思考的参数不被支持时，去掉再试一次，并记住。
-    // 错误信息里提到 response_format 就先去掉 JSON 模式，否则先去掉关闭思考的参数
-    if (e instanceof LlmError && e.kind === 'bad-request' && (useJson || useOff)) {
-      const blameJson = useJson && (!useOff || /response_format|json/i.test(e.message))
-      ;(blameJson ? noJsonMode : noThinkingOff).add(key)
-      return complete(p, req)
-    }
-    throw e
-  }
+  const data = raw as OpenAiReply
   const msg = data.choices?.[0]?.message
   return {
     text: msg?.content ?? '',
@@ -343,6 +419,42 @@ export async function complete(p: LlmProfile, req: LlmRequest): Promise<LlmRespo
       cached: data.usage?.prompt_tokens_details?.cached_tokens ?? 0,
     },
     truncated: data.choices?.[0]?.finish_reason === 'length',
+  }
+}
+
+export async function complete(p: LlmProfile, req: LlmRequest): Promise<LlmResponse> {
+  const key = configKey(p)
+  const useJson = p.protocol === 'openai' && !!req.json && !noJsonMode.has(key)
+  const candidates = thinkingOffCandidates(p)
+  const offIndex = offChoice.get(key) ?? 0
+  const off = p.reasoning === 'off' && offIndex < candidates.length ? candidates[offIndex] : null
+  const body = buildBody(p, req, { json: useJson, off })
+  const onDelta = noStream.has(key) ? undefined : req.onDelta
+  if (onDelta) {
+    body.stream = true
+    // OpenAI 兼容接口要显式要求在流的最后返回用量
+    if (p.protocol === 'openai') body.stream_options = { include_usage: true }
+  }
+  const url = endpoint(p, p.protocol === 'anthropic' ? '/messages' : '/chat/completions')
+  const init = { method: 'POST', headers: headers(p), body: JSON.stringify(body) }
+  try {
+    if (onDelta) return await send(p, url, init, req.signal, (res) => readStream(p, res, onDelta))
+    return parseReply(p, await send(p, url, init, req.signal))
+  } catch (e) {
+    // 流式输出的参数不被接受：退回普通请求，并记住
+    if (onDelta && e instanceof LlmError && e.kind === 'bad-request' && /stream/i.test(e.message)) {
+      noStream.add(key)
+      return complete(p, req)
+    }
+    // JSON 模式或关闭思考的参数不被接受：去掉 JSON 模式，或者换下一种关闭思考的写法，再试一次，并记住。
+    // 错误信息里提到 response_format 就先去掉 JSON 模式，否则先换关闭思考的写法
+    if (e instanceof LlmError && e.kind === 'bad-request' && (useJson || off)) {
+      const blameJson = useJson && (!off || /response_format|json/i.test(e.message))
+      if (blameJson) noJsonMode.add(key)
+      else offChoice.set(key, offIndex + 1)
+      return complete(p, req)
+    }
+    throw e
   }
 }
 

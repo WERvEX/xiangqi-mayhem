@@ -22,6 +22,7 @@ export function Home({
   const [showCodex, setShowCodex] = useState(false)
   const savedAi = useSaved('ai')
   const savedHotseat = useSaved('hotseat')
+  const savedEve = useSaved('eve')
   return (
     <div className="home">
       <h1 className="title">
@@ -34,6 +35,7 @@ export function Home({
       {savedHotseat && (
         <ResumeCard saved={savedHotseat} onResume={() => onResume('hotseat')} onDiscard={() => clearSaved('hotseat')} />
       )}
+      {savedEve && <ResumeCard saved={savedEve} onResume={() => onResume('eve')} onDiscard={() => clearSaved('eve')} />}
 
       <div className="home-actions">
         <button type="button" className="primary big mode-button" onClick={onPvp}>
@@ -94,25 +96,6 @@ export function PvpMenu({ onOnline, onHotseat, onBack }: { onOnline: () => void;
         <b>同屏对战</b>
         <span>一台设备，两个人轮流走棋</span>
       </button>
-      <button type="button" onClick={onBack}>
-        返回
-      </button>
-    </div>
-  )
-}
-
-/** 模型斗蛐蛐：下一阶段实现 */
-export function EveSoon({ onSettings, onBack }: { onSettings: () => void; onBack: () => void }) {
-  return (
-    <div className="lobby">
-      <h2>模型斗蛐蛐</h2>
-      <section className="lobby-card">
-        <p>选两个大模型互相对战，实时看它们边下边互相"嘴炮"，双方的思考互相隔离。</p>
-        <p className="muted">正在开发中，敬请期待。可以先配置好模型，在「挑战 AI」里和大模型下一局。</p>
-        <button type="button" onClick={onSettings}>
-          配置模型 / API 设置
-        </button>
-      </section>
       <button type="button" onClick={onBack}>
         返回
       </button>

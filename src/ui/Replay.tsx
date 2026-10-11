@@ -13,9 +13,16 @@ import {
 } from '../replay/replay'
 import { GameView } from './GameView'
 import { Modal } from './common'
+import { speechList } from './llmNotes'
 import { SideNote } from './Notes'
 
-const MODE_NAMES: Record<ReplayMode, string> = { hotseat: '同屏对战', ai: '人机对战', online: '联机对战', llm: '大模型对战' }
+const MODE_NAMES: Record<ReplayMode, string> = {
+  hotseat: '同屏对战',
+  ai: '人机对战',
+  online: '联机对战',
+  llm: '大模型对战',
+  eve: '模型斗蛐蛐',
+}
 
 const replayLink = (r: Replay) => `${location.origin}${location.pathname}#replay=${replayToCode(r)}`
 
@@ -258,14 +265,14 @@ export function ReplayView({
         sidesWithNotes.map((side) => {
           const seen = notes.filter((n) => n.side === side && (n.i < step || (step === last && n.i === last)))
           const latest = seen.reduce<(typeof notes)[number] | null>((b, n) => (!b || n.i >= b.i ? n : b), null)
-          const speech = seen.filter((n) => n.speech).at(-1)?.speech
           return [
             side,
             <SideNote
               key={side}
               side={side}
               name={meta[side] ?? ''}
-              note={latest ? { speech: showSpeech ? speech : undefined, thought: latest.thought, fallback: latest.fallback } : null}
+              speeches={showSpeech ? speechList(seen, side, replay.states) : []}
+              latest={latest}
               showThought={showThought}
             />,
           ]

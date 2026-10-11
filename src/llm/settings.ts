@@ -144,10 +144,11 @@ export const PRESETS: Preset[] = [
   {
     id: 'ark-plan',
     name: '火山方舟 Coding Plan',
-    protocol: 'anthropic',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/plan',
-    models: ['ark-code-latest'],
+    // 用 OpenAI 兼容接口：实测 GLM 在 Anthropic 接口上关不掉思考，在这里可以
+    protocol: 'openai',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+    models: ['ark-code-latest', 'glm-5-3-flash-260828'],
     needsProxy: true,
-    note: '这个接口默认开启深度思考，每步要等几十秒，建议把思考强度设为「关闭」。OpenAI 兼容格式的地址是 https://ark.cn-beijing.volces.com/api/plan/v3',
+    note: '这里的模型默认会深度思考，每步要等一两分钟，建议把思考强度设为「关闭」',
   },
 ]

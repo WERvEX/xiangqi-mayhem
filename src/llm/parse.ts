@@ -40,8 +40,36 @@ function toInt(v: unknown): number | null {
 
 export interface ParsedReply<T> {
   value: T
+  /** 给人看的分析：局面判断 + 这一步的理由 */
   analysis: string
+  /** 作战笔记：策略、计划、要提防的威胁，下一步放回提示词 */
   memo: string | null
+  /** 这一步的理由（用于"你最近的决策"） */
+  reason: string
+}
+
+/**
+ * 结构化回复的字段：模型按固定结构回答，便于下一步连贯推理，也便于玩家看懂它在想什么。
+ * 旧格式的 analysis / memo 字段仍然兼容。
+ */
+function thoughtFields(json: Record<string, unknown> | null) {
+  if (!json) return { analysis: '', memo: null, reason: '' }
+  const f = {
+    situation: str(json.situation),
+    strategy: str(json.strategy),
+    reason: str(json.reason),
+    plan: str(json.plan),
+    watch: str(json.watch),
+  }
+  const analysis = [f.situation && `局面：${f.situation}`, f.reason && `这步：${f.reason}`].filter(Boolean).join('\n')
+  const memo = [f.strategy && `策略：${f.strategy}`, f.plan && `计划：${f.plan}`, f.watch && `提防：${f.watch}`]
+    .filter(Boolean)
+    .join('\n')
+  return {
+    analysis: analysis || str(json.analysis),
+    memo: memo || str(json.memo) || null,
+    reason: f.reason || str(json.analysis).slice(0, 80),
+  }
 }
 
 export type ParseResult<T> = ({ ok: true } & ParsedReply<T>) | { ok: false; error: string; analysis: string }
@@ -49,7 +77,8 @@ export type ParseResult<T> = ({ ok: true } & ParsedReply<T>) | { ok: false; erro
 /** 走法回复：返回选项序号（从 0 开始） */
 export function parseMoveReply(text: string, count: number): ParseResult<number> {
   const json = extractJson(text)
-  const analysis = json ? str(json.analysis) : stripThink(text).slice(0, 500)
+  const fields = thoughtFields(json)
+  const analysis = json ? fields.analysis : stripThink(text).slice(0, 500)
   let n = json ? toInt(json.move) : null
   if (n === null) {
     const m = /(?:"?move"?|走法|编号)\s*[:：=]?\s*(\d+)/i.exec(stripThink(text))
@@ -59,18 +88,19 @@ export function parseMoveReply(text: string, count: number): ParseResult<number>
     return { ok: false, error: text.trim() ? '没有找到走法编号' : '回复是空的（可能被截断了）', analysis }
   }
   if (n < 1 || n > count) return { ok: false, error: `编号 ${n} 不存在，有效范围是 1–${count}`, analysis }
-  return { ok: true, value: n - 1, analysis, memo: json ? str(json.memo) || null : null }
+  return { ok: true, value: n - 1, analysis, memo: fields.memo, reason: fields.reason }
 }
 
 /** 选锦囊回复：返回选项序号（从 0 开始）或 reroll */
 export function parseDraftReply(text: string, count: number, canReroll: boolean): ParseResult<number | 'reroll'> {
   const json = extractJson(text)
-  const analysis = json ? str(json.analysis) : stripThink(text).slice(0, 500)
-  const memo = json ? str(json.memo) || null : null
+  const fields = thoughtFields(json)
+  const analysis = json ? fields.analysis : stripThink(text).slice(0, 500)
+  const { memo, reason } = fields
   const raw = json?.choice
   if (typeof raw === 'string' && /reroll|刷新/i.test(raw)) {
     if (!canReroll) return { ok: false, error: '你没有刷新机会了，只能从选项里选一个', analysis }
-    return { ok: true, value: 'reroll', analysis, memo }
+    return { ok: true, value: 'reroll', analysis, memo, reason }
   }
   let n = toInt(raw)
   if (n === null) {
@@ -79,7 +109,7 @@ export function parseDraftReply(text: string, count: number, canReroll: boolean)
   }
   if (n === null) return { ok: false, error: '没有找到选项编号', analysis }
   if (n < 1 || n > count) return { ok: false, error: `选项 ${n} 不存在，有效范围是 1–${count}`, analysis }
-  return { ok: true, value: n - 1, analysis, memo }
+  return { ok: true, value: n - 1, analysis, memo, reason }
 }
 
 /** 发言：去掉推理、引号和多余的格式 */

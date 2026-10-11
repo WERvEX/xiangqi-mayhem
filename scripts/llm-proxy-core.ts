@@ -43,13 +43,16 @@ export async function handleProxy(req: IncomingMessage, res: ServerResponse, tar
   const chunks: Buffer[] = []
   for await (const c of req) chunks.push(c as Buffer)
 
+  // 浏览器断开（超时、取消、离开页面）时，也停止向服务商的请求
+  const upstreamCtl = new AbortController()
+  res.on('close', () => upstreamCtl.abort())
   try {
     const upstream = await fetch(target, {
       method: req.method,
       headers,
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : Buffer.concat(chunks),
+      signal: upstreamCtl.signal,
     })
-    const body = Buffer.from(await upstream.arrayBuffer())
     const out: Record<string, string> = { ...cors }
     const type = upstream.headers.get('content-type')
     if (type) out['content-type'] = type
@@ -58,8 +61,16 @@ export async function handleProxy(req: IncomingMessage, res: ServerResponse, tar
       out['retry-after'] = retry
       out['access-control-expose-headers'] = 'retry-after'
     }
-    res.writeHead(upstream.status, out).end(body)
+    res.writeHead(upstream.status, out)
+    // 边收边转：模型流式输出时，浏览器能实时看到
+    if (upstream.body) {
+      for await (const chunk of upstream.body as unknown as AsyncIterable<Uint8Array>) res.write(chunk)
+    }
+    res.end()
   } catch (e) {
-    res.writeHead(502, cors).end(JSON.stringify({ error: { message: `转发失败：${String(e)}` } }))
+    if (upstreamCtl.signal.aborted) return
+    // 流已经开始转发时只能直接结束
+    if (res.headersSent) res.end()
+    else res.writeHead(502, cors).end(JSON.stringify({ error: { message: `转发失败：${String(e)}` } }))
   }
 }

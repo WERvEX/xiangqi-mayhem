@@ -43,7 +43,7 @@ interface DecideBase {
 }
 
 export type DecideResult =
-  | (DecideBase & { ok: true; action: Action; memo: string | null })
+  | (DecideBase & { ok: true; action: Action; memo: string | null; reason: string })
   | (DecideBase & { ok: false; reason: string })
 
 const sleep = (ms: number, signal?: AbortSignal) =>
@@ -60,7 +60,13 @@ const sleep = (ms: number, signal?: AbortSignal) =>
  * 致命错误（密钥、余额、网络等）和取消会抛出 LlmError；
  * 其余失败（格式错误、超时、服务商临时出错）重试后仍不行，返回 ok: false，由调用方兜底。
  */
-export async function decide(profile: LlmProfile, input: MovePromptInput, signal?: AbortSignal): Promise<DecideResult> {
+export async function decide(
+  profile: LlmProfile,
+  input: MovePromptInput,
+  signal?: AbortSignal,
+  /** 提供时用流式输出，实时回调模型到目前为止输出的思考和回答 */
+  onDelta?: (so: { reasoning: string; text: string }) => void,
+): Promise<DecideResult> {
   const { state, side } = input
   const isDraft = state.phase === 'draft'
   const options = isDraft ? [] : moveOptions(state, input.assist, input.engine)
@@ -74,7 +80,7 @@ export async function decide(profile: LlmProfile, input: MovePromptInput, signal
   let feedback = ''
   let reason = ''
   /** 选了坏棋、正在请它再确认时，记下第一次的选择：确认请求失败就按第一次的走 */
-  let first: { index: number; analysis: string; memo: string | null } | null = null
+  let first: { index: number; analysis: string; memo: string | null; reason: string } | null = null
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     let text: string
@@ -86,6 +92,7 @@ export async function decide(profile: LlmProfile, input: MovePromptInput, signal
         maxTokens: DECIDE_MAX_TOKENS,
         json: true,
         signal,
+        onDelta,
       })
       requests++
       usage = addUsage(usage, res.usage)
@@ -94,6 +101,11 @@ export async function decide(profile: LlmProfile, input: MovePromptInput, signal
       truncated = res.truncated
     } catch (e) {
       if (!(e instanceof LlmError) || e.fatal || e.kind === 'aborted') throw e
+      // 超时不重试：再等一轮通常也是一样慢，直接兜底
+      if (e.kind === 'timeout') {
+        reason = `模型思考超时（${profile.timeoutSec ?? 120} 秒）。可以把思考强度设为「关闭」，或者在模型设置里调整超时`
+        break
+      }
       reason = e.message
       if (attempt + 1 < MAX_ATTEMPTS) await sleep(e.kind === 'rate' ? (e.retryAfter ?? 5) * 1000 : 1000, signal)
       continue
@@ -107,7 +119,7 @@ export async function decide(profile: LlmProfile, input: MovePromptInput, signal
           r.value === 'reroll'
             ? { type: 'reroll', side }
             : { type: 'pick', side, augmentId: ds.options[r.value] }
-        return { ok: true, action, analysis, memo: r.memo, reasoning, usage, requests }
+        return { ok: true, action, analysis, memo: r.memo, reason: r.reason, reasoning, usage, requests }
       }
       reason = r.error
     } else {
@@ -118,7 +130,7 @@ export async function decide(profile: LlmProfile, input: MovePromptInput, signal
         const warning = first ? null : blunderWarning(options, r.value)
         if (warning) {
           // 再问一次，这次不算重试次数
-          first = { index: r.value, analysis: r.analysis, memo: r.memo }
+          first = { index: r.value, analysis: r.analysis, memo: r.memo, reason: r.reason }
           feedback = `
 
 注意：${warning}
@@ -126,14 +138,16 @@ export async function decide(profile: LlmProfile, input: MovePromptInput, signal
           attempt--
           continue
         }
-        return { ok: true, action: options[r.value].action, analysis, memo: r.memo, reasoning, usage, requests }
+        return { ok: true, action: options[r.value].action, analysis, memo: r.memo, reason: r.reason, reasoning, usage, requests }
       }
       reason = r.error
     }
     if (truncated && !text.trim()) reason = TRUNCATED
     feedback = `\n\n注意：你上一次的回复无法使用（${reason}）。请严格按要求只输出一个 JSON 对象。`
   }
-  if (first) return { ok: true, action: options[first.index].action, analysis, memo: first.memo, reasoning, usage, requests }
+  if (first) {
+    return { ok: true, action: options[first.index].action, analysis, memo: first.memo, reason: first.reason, reasoning, usage, requests }
+  }
   return { ok: false, reason, analysis, reasoning, usage, requests }
 }
 

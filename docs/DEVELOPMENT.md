@@ -51,7 +51,10 @@ src/
     Board.tsx        # SVG 棋盘、棋子与特效
     HotseatGame.tsx  # 同屏对战
     AiGame.tsx       # 挑战 AI（设置与规则 AI 对局）
-    LlmGame.tsx      # 大模型对局：发言与走棋、兜底、复盘
+    LlmGame.tsx      # 玩家对战大模型
+    EveGame.tsx      # 模型斗蛐蛐：两个大模型对战（设置与观战）
+    useLlmSide.ts    # 驱动一方大模型：发言、走棋、兜底、结束语（两种模式共用）
+    llmNotes.ts      # 大模型的发言与思考记录（有效性、存档、回放）
     LlmSettings.tsx  # 模型配置界面
     Notes.tsx        # 大模型的发言气泡与思考
     OnlineGame.tsx   # 联机大厅与房间
@@ -174,6 +177,9 @@ XQM_LLM_PROTOCOL=openai XQM_LLM_BASE=https://api.deepseek.com XQM_LLM_KEY=... XQ
   可选参数：`--no-annotate`（关辅助标注）、`--no-comment`（不发言）、`--seed`；环境变量 `XQM_LLM_REASONING` 设思考强度。回放（含发言与思考）写到 `.sim/`，可以在网页的「观看回放」里打开
 - **跨域**：开发服务器自带转发 `/__llm_proxy/<目标地址>`，设置界面「高级」里有一键填写按钮；网页版用户运行 `npm run llm-proxy`。转发只接受本机页面和正式站点的请求，只转发到 https 地址
 - 单元测试（`src/llm/llm.test.ts`）用假的 fetch，不调用真实接口
+- 玩家对模型、模型对模型共用 `useLlmSide`：每一方各自管理任务、用量、兜底和接管；发言与思考记录由页面保存在一个列表里，按 side 区分
+- **模型对战模型的隔离**：走棋请求里只有棋盘、双方走法、公开锦囊和自己的备忘；发言请求默认也一样，「对喷模式」下多一句对方最近的发言（`opponentSpeech`）。思考和备忘永远不会出现在对方的请求里
+- 命令行也能跑模型对战：`npm run llm-match -- --eve --hear`，黑方可以用 `XQM_LLM2_*` 环境变量指定另一个模型，不指定就自己打自己
 
 ## 平衡性模拟
 

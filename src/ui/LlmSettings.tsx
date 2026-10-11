@@ -167,7 +167,9 @@ export function ProfileEditor({
         json: true,
       })
       const sec = ((performance.now() - t0) / 1000).toFixed(1)
-      const offNote = thinkingOffRejected(p) ? '。注意：这个服务商不接受关闭思考的参数，已自动忽略' : ''
+      const offNote = thinkingOffRejected(p)
+        ? `。注意：这个模型在${p.protocol === 'anthropic' ? ' Anthropic 接口上' : '这个接口上'}关不掉思考，每步会很慢${p.protocol === 'anthropic' ? '，可以试试改用 OpenAI 兼容接口' : ''}`
+        : ''
       const thinkNote = res.reasoning.trim() ? `。模型思考了 ${res.reasoning.length} 字，嫌慢可以把思考强度设为「关闭」` : ''
       const json = extractJson(res.text)
       if (json?.move === 3 || json?.move === '3') setTest({ status: 'ok', text: `连接成功，${sec} 秒${offNote}${thinkNote}` })
@@ -336,8 +338,8 @@ export function ProfileEditor({
         </select>
       </label>
       <p className="field-note">
-        思考越多下得越好，但每步也越慢（可能要几十秒），部分模型默认就会深度思考。追求节奏的话可以关闭思考，配合「战术检查」辅助，棋力不会差太多。
-        OpenAI 兼容接口的「关闭」会按服务商自动选择参数；「低 / 中 / 高」对部分模型不起作用。
+        推荐「关闭」，配合「战术检查」辅助，每步几秒。「低 / 中 / 高」只是给模型的建议，很多模型并不遵守：实测火山方舟上的
+        DeepSeek、GLM 选「低」也要想 1–3 分钟，还常常想到输出上限也给不出答案。「关闭」会按服务商自动尝试几种写法。
       </p>
 
       <details className="advanced">

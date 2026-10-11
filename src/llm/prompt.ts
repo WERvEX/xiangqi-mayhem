@@ -301,16 +301,46 @@ export interface MovePromptInput {
   state: GameState
   side: Side
   history: TurnRecord[]
+  /** 作战笔记：上一步写下的策略、计划、要提防的威胁 */
   memo: string
   assist: AssistLevel
   /** 引擎对每个走法的打分（战术检查、引擎推荐时需要） */
   engine?: MoveScore[] | null
+  /** 自己最近几步的决策和理由，如"第 10 回合 炮 h2→e2：控制中路" */
+  decisions?: string[]
 }
+
+/**
+ * 连贯推理：每步独立请求，但把模型自己的"作战笔记"和最近几步的决策放回提示词，
+ * 让它先检查计划还成不成立，再决定下一步。这样上下文长度固定，不会越下越长。
+ */
+function notebook(memo: string, decisions: string[] | undefined): string[] {
+  const parts = ['', '你的作战笔记（上一步写的）：', memo.trim() || '（还没有，这是你的第一步）']
+  if (decisions?.length) parts.push('', '你最近几步的决策：', ...decisions.map((d) => `- ${d}`))
+  if (memo.trim()) parts.push('先想一想：对方刚才的行动有没有打乱你的计划？计划还成立就继续执行，不成立就调整。')
+  return parts
+}
+
+/** 走棋回复的结构：前后一致的结构化思考，便于连贯推理，也便于玩家看懂 */
+const MOVE_FORMAT = [
+  '只输出一个 JSON 对象，不要输出其他内容。各字段都用简短的中文：',
+  '{',
+  '  "situation": "局面判断：谁占优，关键的威胁和机会（不超过 80 字）",',
+  '  "strategy": "你这一阶段的策略（不超过 50 字，没变就沿用）",',
+  '  "move": 走法编号,',
+  '  "reason": "为什么走这一步（不超过 50 字）",',
+  '  "plan": "接下来两三步的打算（不超过 60 字）",',
+  '  "watch": "需要提防的威胁（不超过 40 字，没有就写“无”）"',
+  '}',
+]
 
 const numbers = (opts: MoveOption[], pick: (o: MoveOption) => boolean | undefined) =>
   opts.flatMap((o, i) => (pick(o) ? [i + 1] : []))
 
-export function movePrompt({ state, side, history, memo, assist }: MovePromptInput, options: MoveOption[]): string {
+export function movePrompt(
+  { state, side, history, memo, assist, decisions }: MovePromptInput,
+  options: MoveOption[],
+): string {
   const extra = state.extraMoves[0]
   const parts = [renderPosition(state, side), '', '最近的行动：', recentMoves(history)]
   if (extra) {
@@ -334,7 +364,7 @@ export function movePrompt({ state, side, history, memo, assist }: MovePromptInp
     parts.push(`⚠ 对方正在威胁杀棋！只有这些走法能避免被强制吃将：编号 ${safe.join('、')}。其他走法都会输。`)
   }
 
-  parts.push('', '你上一步留给自己的备忘：', memo.trim() || '（无）')
+  parts.push(...notebook(memo, decisions))
   parts.push('', `合法走法（共 ${options.length} 个，只能从中选一个）：`, ...options.map((o, i) => `${i + 1}. ${o.label}`))
   if (assist !== 'off') {
     const notes = [
@@ -351,27 +381,20 @@ export function movePrompt({ state, side, history, memo, assist }: MovePromptInp
   if (needsEngine(assist)) {
     parts.push('程序已经替你检查了战术风险，不需要长时间推演：先避开带 ⚠ 和"吃亏"的走法，再从剩下的走法里选一个符合你计划的。')
   }
-  parts.push(
-    '',
-    '请先简要分析局面（不超过 150 字），再选择走法，并给下一步的自己写一条备忘（不超过 150 字，例如你的计划、要提防的威胁）。',
-    '只输出一个 JSON 对象，不要输出其他内容：',
-    '{"analysis": "分析", "memo": "备忘", "move": 走法编号}',
-  )
+  parts.push('', ...MOVE_FORMAT)
   return parts.join('\n')
 }
 
 // ───────────── 选锦囊请求 ─────────────
 
-export function draftPrompt({ state, side, history, memo }: Omit<MovePromptInput, 'assist'>): string {
+export function draftPrompt({ state, side, history, memo, decisions }: Omit<MovePromptInput, 'assist'>): string {
   const ds = state.draft!.sides[side]
   const parts = [
     renderPosition(state, side),
     '',
     '最近的行动：',
     recentMoves(history),
-    '',
-    '你上一步留给自己的备忘：',
-    memo.trim() || '（无）',
+    ...notebook(memo, decisions),
     '',
     `现在轮到你选择锦囊（${TIER_NAMES[ds.tier]}${ds.comeback ? '，因为子力落后品质提升了一档' : ''}）：`,
     ...ds.options.map((id, i) => `${i + 1}. ${AUGMENTS[id].name}：${AUGMENTS[id].desc}`),
@@ -380,9 +403,16 @@ export function draftPrompt({ state, side, history, memo }: Omit<MovePromptInput
       ? `你还有 ${state.rerollsLeft[side]} 次刷新机会，可以放弃这三个换一批（choice 填 "reroll"）。`
       : '你没有刷新机会了，只能三选一。',
     '',
-    '请结合局面和双方已有的锦囊简要分析（不超过 150 字），然后做出选择，并更新给自己的备忘（不超过 150 字）。',
-    '只输出一个 JSON 对象，不要输出其他内容：',
-    '{"analysis": "分析", "memo": "备忘", "choice": 选项编号或 "reroll"}',
+    '请结合局面和双方已有的锦囊做出选择，并更新你的作战笔记。',
+    '只输出一个 JSON 对象，不要输出其他内容。各字段都用简短的中文：',
+    '{',
+    '  "situation": "局面判断（不超过 80 字）",',
+    '  "choice": 选项编号或 "reroll",',
+    '  "reason": "为什么选它（不超过 50 字）",',
+    '  "strategy": "拿到这个锦囊之后的策略（不超过 50 字）",',
+    '  "plan": "接下来两三步的打算（不超过 60 字）",',
+    '  "watch": "需要提防的威胁，包括对方锦囊带来的（不超过 40 字）"',
+    '}',
   ]
   return parts.join('\n')
 }
@@ -391,7 +421,7 @@ export function draftPrompt({ state, side, history, memo }: Omit<MovePromptInput
 
 export const PERSONAS = {
   calm: { name: '冷静解说', prompt: '语气冷静、客观、专业，像电视上的象棋解说员，偶尔冒出一句冷幽默。' },
-  cocky: { name: '嘴硬棋手', prompt: '嘴硬、自信过头、爱嘲讽对手（但不说脏话），局面落后时也死不认账，会找各种借口。' },
+  cocky: { name: '嘴硬棋手', prompt: '自信、嘴硬，喜欢调侃两句；局面落后时也不服输，会给自己找理由。调侃点到为止，不人身攻击。' },
   strategist: { name: '古风谋士', prompt: '说话半文半白，像三国时期的谋士，喜欢引用兵法和成语。' },
   rookie: { name: '热血新人', prompt: '热情、一惊一乍，容易被对手的好棋吓到，也会为自己的小优势欢呼，喜欢用感叹号。' },
 } as const
@@ -407,9 +437,18 @@ export interface CommentPromptInput {
   opponentActions: TurnRecord[]
   moment: CommentMoment
   persona: string
+  /** 对喷模式（模型对战时可选）：对方上一句说了什么。走棋请求里永远没有这个 */
+  opponentSpeech?: string
 }
 
-export function commentPrompt({ state, side, opponentActions, moment, persona }: CommentPromptInput): string {
+export function commentPrompt({
+  state,
+  side,
+  opponentActions,
+  moment,
+  persona,
+  opponentSpeech,
+}: CommentPromptInput): string {
   const parts = [renderPosition(state, side), '']
   if (opponentActions.length) {
     parts.push(
@@ -422,14 +461,19 @@ export function commentPrompt({ state, side, opponentActions, moment, persona }:
     const threats = threatsAgainst(state, side)
     if (threats.length) parts.push('目前你的棋子受到的攻击：', ...threats, '')
   }
+  if (opponentSpeech) parts.push(`对方刚才对你说：「${opponentSpeech}」`, '')
   parts.push(`你的说话风格：${persona}`, '')
   const task: Record<CommentMoment, string> = {
     opening: '对局刚开始，对你的对手说一句开场白。',
-    reply: '用 1–2 句话点评对方刚才的行动和当前局势。只评论已经发生的事，绝对不要提你接下来打算怎么走。',
+    reply:
+      '用一两句话点评对方刚才这步棋和当前局势，重点说棋盘上发生了什么：吃子、威胁、攻守形势。锦囊只在它刚刚改变了局面时才提。只评论已经发生的事，不要提你接下来打算怎么走。',
     win: '对局结束，你赢了。对你的对手说一句结束语。',
     lose: '对局结束，你输了。对你的对手说一句结束语。',
     draw: '对局结束，双方和棋。对你的对手说一句结束语。',
   }
-  parts.push(task[moment], '直接输出你要说的话（不超过 60 个字），不要加引号、不要任何格式或解释。')
+  parts.push(task[moment])
+  parts.push('像棋手对局时随口说的一句话：以评棋为主，不必每句都冲着对手说。')
+  if (opponentSpeech) parts.push('对方的话可以简短接一句，也可以不理；重点仍是点评棋局，不要变成吵架，也不要透露你的打算。')
+  parts.push('直接输出你要说的话（不超过 60 个字），不要加引号、不要任何格式或解释。')
   return parts.join('\n')
 }
