@@ -18,7 +18,7 @@ import type { Action, DraftSide, GameState, Move, Piece, RuleMods, Side, Tier } 
  * 规则版本。任何会改变对局结果的改动（包括锦囊数值）都要加一。
  * 联机时双方版本必须一致；回放会记录它，版本不同时给出提示。
  */
-export const RULES_VERSION = 4
+export const RULES_VERSION = 5
 
 export const CONFIG = {
   /** 在这些回合发放锦囊；轮流在红方、黑方走棋前发放（见 draftSide） */

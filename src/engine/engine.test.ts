@@ -274,6 +274,13 @@ describe('锦囊', () => {
     expect(s.pieces.filter((p) => p.side === 'red' && p.type === 'R').every((p) => p.shield === 1)).toBe(true)
   })
 
+  it('满城尽带黄金甲：只给车和马加护盾', () => {
+    const s = createGame('hj')
+    AUGMENTS.huangjinjia.onPick!(s, 'red', {})
+    const red = s.pieces.filter((p) => p.side === 'red')
+    expect(red.filter((p) => p.shield > 0).map((p) => p.type).sort()).toEqual(['N', 'N', 'R', 'R'])
+  })
+
   it('众志成城：兵卒过河时获得护盾', () => {
     let s = position([['red', 'P', 2, 5]], { red: ['zhongzhi'] })
     s = move(s, [2, 5], [2, 4])

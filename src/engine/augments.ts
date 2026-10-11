@@ -386,8 +386,8 @@ export const AUGMENT_LIST: AugmentDef[] = [
     name: '满城尽带黄金甲',
     tier: 'prism',
     glyph: '金',
-    desc: '你现有的车、马、炮、士、象各获得 1 层护盾。',
-    onPick: (s, side) => addShield(s, side, (p) => p.type !== 'K' && p.type !== 'P'),
+    desc: '你现有的车和马各获得 1 层护盾。',
+    onPick: (s, side) => addShield(s, side, (p) => p.type === 'R' || p.type === 'N'),
   },
   {
     id: 'zongheng',

@@ -135,11 +135,20 @@ function noise(c: AudioContext, out: AudioNode, t0: number, o: NoiseOpts) {
   src.stop(start + o.dur + 0.02)
 }
 
-/** 木头棋子落在棋盘上的"嗒" */
-function clack(c: AudioContext, out: AudioNode, t: number, loud = 1) {
-  noise(c, out, t, { dur: 0.05, gain: 0.5 * loud, freq: 2200, q: 2.5 })
-  noise(c, out, t, { dur: 0.08, gain: 0.25 * loud, freq: 700, q: 1.5 })
-  tone(c, out, t, { freq: 220, to: 140, dur: 0.09, gain: 0.25 * loud })
+/**
+ * 木头棋子落在木棋盘上的"嗒"：极短的撞击声 + 几个很快衰减的木头共振。
+ * 不用往下滑的低频音（那样像打鼓）；每次音高略有不同，连续落子不会像复读。
+ * pitch：整体音高倍数，吃子时棋子撞棋子更脆一些
+ */
+function clack(c: AudioContext, out: AudioNode, t: number, loud = 1, pitch = 1) {
+  const v = pitch * (1 + (Math.random() - 0.5) * 0.08)
+  // 撞击的瞬间
+  noise(c, out, t, { dur: 0.012, gain: 0.65 * loud, filter: 'highpass', freq: 2500 * v })
+  // 木头共振：窄带噪声听起来像敲木块
+  noise(c, out, t, { dur: 0.055, gain: 1.4 * loud, freq: 1150 * v, q: 9 })
+  tone(c, out, t, { freq: 1720 * v, dur: 0.03, gain: 0.1 * loud, attack: 0.001 })
+  // 棋盘的一点闷响，很短、不滑音
+  tone(c, out, t, { freq: 520 * v, dur: 0.04, gain: 0.12 * loud, attack: 0.001 })
 }
 
 const arpeggio = (c: AudioContext, out: AudioNode, t: number, notes: number[], step: number, o: Partial<ToneOpts> = {}) =>
@@ -148,10 +157,10 @@ const arpeggio = (c: AudioContext, out: AudioNode, t: number, notes: number[], s
 const SOUNDS: Record<SoundName, (c: AudioContext, out: AudioNode, t: number) => void> = {
   select: (c, out, t) => noise(c, out, t, { dur: 0.025, gain: 0.12, freq: 3200, q: 3 }),
   move: (c, out, t) => clack(c, out, t),
+  // "啪嗒"：先撞上对方的棋子（更脆），紧接着落在棋盘上
   capture: (c, out, t) => {
-    clack(c, out, t, 1.3)
-    tone(c, out, t, { freq: 130, to: 55, dur: 0.22, gain: 0.35 })
-    noise(c, out, t, { at: 0.02, dur: 0.18, gain: 0.18, freq: 500, q: 0.8 })
+    clack(c, out, t, 1.2, 1.35)
+    clack(c, out, t + 0.05, 1.1)
   },
   // 玻璃似的"叮"：攻击被护盾弹开
   shieldBlock: (c, out, t) => {
