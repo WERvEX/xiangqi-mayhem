@@ -1629,3 +1629,13 @@ button.link {
   font-size: 12px;
   font-family: ui-monospace, Consolas, monospace;
 }
+
+/* ───── 网络检测 ───── */
+.net-check ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.8;
+}

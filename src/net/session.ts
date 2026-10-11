@@ -1,6 +1,6 @@
 import { applyAction, createGame, other, randomSeed, type Action, type GameState, type Side } from '../engine'
 import { PROTOCOL_VERSION, type NetMessage } from './protocol'
-import type { Connection, HostHandle, Transport } from './transport'
+import type { Connection, HostHandle, Route, Transport } from './transport'
 
 export type SessionStatus = 'connecting' | 'waiting' | 'playing' | 'error'
 
@@ -15,6 +15,8 @@ export interface SessionSnapshot {
   reconnecting: boolean
   rematchVotes: Side[]
   error: string | null
+  /** 与对方的连接方式：直连或经中转（查询不到时为 null） */
+  route: Route | null
 }
 
 const MAX_RECONNECT = 4
@@ -50,7 +52,18 @@ export class OnlineSession {
       reconnecting: false,
       rematchVotes: [],
       error: null,
+      route: null,
     }
+  }
+
+  /** 连接建立后查一下走的是直连还是中转（统计信息要稍等才准确） */
+  private detectRoute(conn: Connection) {
+    if (!conn.route) return
+    setTimeout(() => {
+      void conn.route!().then((route) => {
+        if (conn === this.conn) this.patch({ route })
+      })
+    }, 1500)
   }
 
   // ───── 给 React useSyncExternalStore 用 ─────
@@ -101,7 +114,8 @@ export class OnlineSession {
         if (this.conn && this.conn !== conn) this.conn.close()
         this.conn = conn
         this.sendSync()
-        this.patch({ status: 'playing', opponentOnline: true })
+        this.patch({ status: 'playing', opponentOnline: true, route: null })
+        this.detectRoute(conn)
         return
       }
       if (conn !== this.conn) return
@@ -180,6 +194,8 @@ export class OnlineSession {
     }
     if (this.closed) return conn.close()
     this.conn = conn
+    this.patch({ route: null })
+    this.detectRoute(conn)
     conn.onMessage((msg) => this.onHostMessage(msg))
     conn.onClose(() => {
       if (conn !== this.conn) return

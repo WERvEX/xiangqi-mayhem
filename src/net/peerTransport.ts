@@ -1,25 +1,22 @@
 import type { DataConnection, Peer, PeerError, PeerOptions } from 'peerjs'
+import { ICE_SERVERS } from './iceServers'
 import type { NetMessage } from './protocol'
-import type { Connection, HostHandle, Transport } from './transport'
+import type { Connection, HostHandle, Route, Transport } from './transport'
 
 const ID_PREFIX = 'xqmayhem-'
 
+/** 调试用：在控制台执行 localStorage.xqmForceRelay = 1 后刷新，强制只走中转，用来检查中转服务器 */
+const forceRelay = () => {
+  try {
+    return localStorage.getItem('xqmForceRelay') === '1'
+  } catch {
+    return false
+  }
+}
+
 const PEER_OPTIONS: PeerOptions = {
   debug: 1,
-  config: {
-    iceServers: [
-      // 国内可用的 STUN 放前面；Google 的在国内不可用，留给海外用户
-      { urls: ['stun:stun.miwifi.com:3478', 'stun:stun.chat.bilibili.com:3478'] },
-      { urls: 'stun:stun.cloudflare.com:3478' },
-      { urls: 'stun:stun.l.google.com:19302' },
-      // PeerJS 官方提供的公共 TURN，直连失败时兜底
-      {
-        urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'],
-        username: 'peerjs',
-        credential: 'peerjsp',
-      },
-    ],
-  },
+  config: { iceServers: ICE_SERVERS, iceTransportPolicy: forceRelay() ? 'relay' : 'all' },
 }
 
 const OPEN_TIMEOUT = 15000
@@ -90,6 +87,7 @@ function wrap(dc: DataConnection, onClosed?: () => void): Connection {
   dc.on('error', fireClose)
 
   return {
+    route: () => routeOf(dc.peerConnection),
     send: (msg) => {
       if (dc.open) dc.send(msg)
     },
@@ -143,7 +141,7 @@ export const peerTransport: Transport = {
         reject(new Error(msg))
       }
       const timer = setTimeout(
-        () => fail('连接超时：当前网络可能不支持直连。可以让双方连同一个 Wi-Fi，或换个网络再试'),
+        () => fail('连接超时：没能和房主建立连接。可以在联机大厅点「网络检测」，看看是哪一步出了问题'),
         CONNECT_TIMEOUT,
       )
       peer.on('error', (e) => fail(describe(e)))
@@ -171,8 +169,81 @@ function describe(e: unknown): string {
     case 'browser-incompatible':
       return '当前浏览器不支持联机，请换用 Chrome、Edge 或 Safari'
     case 'webrtc':
-      return '建立直连失败，可以换个网络再试'
+      return '建立连接失败，可以在联机大厅点「网络检测」看看是哪一步出了问题'
     default:
       return e instanceof Error ? e.message : `连接失败（${type ?? '未知错误'}）`
+  }
+}
+
+/** 当前连接走的是直连还是中转（读取 WebRTC 统计里选中的候选对） */
+async function routeOf(pc: RTCPeerConnection | undefined): Promise<Route | null> {
+  if (!pc) return null
+  try {
+    const stats = [...(await pc.getStats()).values()] as Record<string, unknown>[]
+    const transport = stats.find((s) => s.type === 'transport' && s.selectedCandidatePairId)
+    const pair =
+      stats.find((s) => s.id === transport?.selectedCandidatePairId) ??
+      stats.find((s) => s.type === 'candidate-pair' && s.state === 'succeeded' && s.nominated)
+    if (!pair) return null
+    const local = stats.find((s) => s.id === pair.localCandidateId)
+    const remote = stats.find((s) => s.id === pair.remoteCandidateId)
+    return local?.candidateType === 'relay' || remote?.candidateType === 'relay' ? 'relay' : 'direct'
+  } catch {
+    return null
+  }
+}
+
+// ───────────── 网络检测 ─────────────
+
+export interface NetworkCheck {
+  /** 能连上信令服务器（用来交换连接信息） */
+  signaling: boolean
+  /** STUN 能拿到公网地址（才有可能打洞直连） */
+  stun: boolean
+  /** 能连上我们的中转服务器 */
+  relayUdp: boolean
+  relayTcp: boolean
+}
+
+/** 收集一次 ICE 候选，看看能拿到哪些类型 */
+async function gatherCandidates(timeoutMs: number): Promise<RTCIceCandidate[]> {
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+  const found: RTCIceCandidate[] = []
+  try {
+    pc.createDataChannel('check')
+    pc.onicecandidate = (e) => {
+      if (e.candidate) found.push(e.candidate)
+    }
+    await pc.setLocalDescription(await pc.createOffer())
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, timeoutMs)
+      pc.onicegatheringstatechange = () => {
+        if (pc.iceGatheringState === 'complete') {
+          clearTimeout(timer)
+          resolve()
+        }
+      }
+    })
+  } finally {
+    pc.close()
+  }
+  return found
+}
+
+export async function checkNetwork(): Promise<NetworkCheck> {
+  const signaling = loadPeer()
+    .then((PeerCtor) => openPeer(PeerCtor))
+    .then((peer) => {
+      peer.destroy()
+      return true
+    })
+    .catch(() => false)
+  const candidates = await gatherCandidates(8000)
+  const relays = candidates.filter((c) => c.type === 'relay')
+  return {
+    signaling: await signaling,
+    stun: candidates.some((c) => c.type === 'srflx'),
+    relayUdp: relays.some((c) => (c as RTCIceCandidate & { relayProtocol?: string }).relayProtocol !== 'tcp'),
+    relayTcp: relays.some((c) => (c as RTCIceCandidate & { relayProtocol?: string }).relayProtocol === 'tcp'),
   }
 }

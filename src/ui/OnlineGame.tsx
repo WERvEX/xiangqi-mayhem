@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { other, SIDE_NAMES, type Side } from '../engine'
-import { peerTransport } from '../net/peerTransport'
+import { checkNetwork, peerTransport, type NetworkCheck } from '../net/peerTransport'
 import { OnlineSession } from '../net/session'
 import { makeReplay, type Replay } from '../replay/replay'
 import { GameView } from './GameView'
@@ -111,8 +111,10 @@ function Lobby({
       </section>
 
       <p className="muted lobby-note">
-        联机是点对点直连。如果连不上，可以让双方连同一个 Wi-Fi，或者换个网络再试。
+        联机优先点对点直连；双方网络无法直连时，会自动经中转服务器转发。连不上的话，可以让双方都做一下网络检测。
       </p>
+
+      <NetworkCheckCard />
 
       <button type="button" onClick={onBack}>
         返回主页
@@ -218,6 +220,11 @@ function OnlineRoom({ session, onLeave }: { session: OnlineSession; onLeave: () 
     banner = (
       <div className="conn-banner ok">
         <span className="dot" /> 房间 {snap.roomCode} · 对方在线
+        {snap.route && (
+          <span className="muted" title={snap.route === 'relay' ? '双方网络无法直连，消息经中转服务器转发' : '双方点对点直接连接'}>
+            · {snap.route === 'relay' ? '经中转' : '直连'}
+          </span>
+        )}
       </div>
     )
   } else if (snap.role === 'host') {
@@ -264,5 +271,48 @@ function OnlineRoom({ session, onLeave }: { session: OnlineSession; onLeave: () 
       />
       {sharing && <ReplayShareModal replay={sharing} onClose={() => setSharing(null)} />}
     </>
+  )
+}
+
+const CHECK_ITEMS: { key: keyof NetworkCheck; name: string; fail: string }[] = [
+  { key: 'signaling', name: '联机服务器', fail: '连不上，双方无法交换连接信息。请检查网络，或者换个网络再试' },
+  { key: 'stun', name: '直连能力', fail: '拿不到公网地址，只能走中转（不影响联机）' },
+  { key: 'relayUdp', name: '中转服务器（UDP）', fail: '连不上' },
+  { key: 'relayTcp', name: '中转服务器（TCP）', fail: '连不上' },
+]
+
+/** 网络检测：逐项检查联机要用到的服务器，帮玩家判断是哪一步出了问题 */
+function NetworkCheckCard() {
+  const [result, setResult] = useState<NetworkCheck | 'running' | null>(null)
+  const run = async () => {
+    setResult('running')
+    setResult(await checkNetwork())
+  }
+  const r = result !== 'running' ? result : null
+  let verdict = ''
+  if (r) {
+    if (!r.signaling) verdict = '❌ 连不上联机服务器，暂时无法联机'
+    else if (!r.relayUdp && !r.relayTcp && !r.stun) verdict = '❌ 直连和中转都不可用，联机很可能失败'
+    else if (!r.relayUdp && !r.relayTcp) verdict = '⚠ 中转服务器连不上，只能直连，换个网络更稳'
+    else verdict = '✅ 网络正常，可以联机'
+  }
+  return (
+    <section className="lobby-card net-check">
+      <h3>网络检测</h3>
+      {r && (
+        <ul>
+          {CHECK_ITEMS.map((item) => (
+            <li key={item.key}>
+              <span>{r[item.key] ? '✅' : '❌'}</span> {item.name}
+              {!r[item.key] && <span className="muted">：{item.fail}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {r && <p>{verdict}</p>}
+      <button type="button" onClick={run} disabled={result === 'running'}>
+        {result === 'running' ? '检测中…（约 10 秒）' : r ? '重新检测' : '开始检测'}
+      </button>
+    </section>
   )
 }

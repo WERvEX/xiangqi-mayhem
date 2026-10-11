@@ -215,9 +215,24 @@ interface Transport {
 }
 ```
 
-目前的实现是 `peerTransport`（PeerJS，信令走 PeerJS 公共服务器，STUN 优先用国内可用的地址，并保留 PeerJS 的公共 TURN 兜底）。
+目前的实现是 `peerTransport`（PeerJS），用到三种服务器：
 
-如果以后要提高国内连通率，可以新增一个 WebSocket 中转实现：服务器只需要按房间号转发消息，不需要理解游戏规则。然后在 `OnlineGame.tsx` 中替换传输层即可。
+- **信令**：PeerJS 公共服务器，只在建立连接时交换连接信息
+- **STUN**（打洞）：优先用国内可用的地址，见 `src/net/iceServers.ts`
+- **TURN**（中转）：部署在我们自己的云服务器上（coturn）。双方都在运营商级 NAT 后面（手机流量、很多家庭宽带）时打洞会失败，就走中转。PeerJS 原来的公共 TURN 已经停止服务（域名不再解析）
+
+连上之后，联机状态条会显示「直连」或「经中转」；联机大厅有「网络检测」，逐项检查信令、打洞和中转。
+
+### 中转服务器
+
+- 安装：在一台 Ubuntu 云服务器上运行 `bash scripts/turn-setup.sh <公网IP>`，然后在云服务商控制台放行 UDP 3478、TCP 3478、UDP 49152-49999，把脚本输出的地址和密码填进 `src/net/iceServers.ts`
+- 用户名密码写在前端代码里，是公开的。服务器端做了限制，被拿去当通用中转也没什么用：
+  - 每个会话最多 16 KB/s，总共约 2.4 Mbps
+  - 只做 UDP 中转
+  - 禁止中转到内网地址
+- 检查中转：在浏览器控制台执行 `localStorage.xqmForceRelay = 1` 后刷新，这个浏览器就只会走中转；开两个标签页联机，状态条应显示「经中转」。用完执行 `localStorage.removeItem('xqmForceRelay')`
+
+如果以后要做排位等需要服务器权威的模式，可以新增一个 WebSocket 传输实现，在 `OnlineGame.tsx` 中替换传输层即可。
 
 ### 测试
 
