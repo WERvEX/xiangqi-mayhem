@@ -153,6 +153,18 @@ export function Board({
         <marker id="hintArrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto">
           <path d="M0,0 L10,5 L0,10 z" fill="#ffb300" />
         </marker>
+        {/* 护盾：透明的半球罩子。左上偏亮、右下偏浓，看起来是鼓起来的；外面一圈柔光 */}
+        <radialGradient id="shieldBubble" cx="50%" cy="50%" r="50%" fx="38%" fy="34%">
+          <stop offset="0%" stopColor="#e6fbff" stopOpacity="0.12" />
+          <stop offset="55%" stopColor="#86e2ff" stopOpacity="0.2" />
+          <stop offset="82%" stopColor="#38c3f2" stopOpacity="0.38" />
+          <stop offset="100%" stopColor="#139fd6" stopOpacity="0.8" />
+        </radialGradient>
+        <radialGradient id="shieldGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="82%" stopColor="#5ad6ff" stopOpacity="0" />
+          <stop offset="90%" stopColor="#5ad6ff" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#5ad6ff" stopOpacity="0" />
+        </radialGradient>
         <radialGradient id="vignette" cx="50%" cy="50%" r="70%">
           <stop offset="70%" stopColor="#000" stopOpacity="0" />
           <stop offset="100%" stopColor="#3a2108" stopOpacity="0.28" />
@@ -350,6 +362,23 @@ function PieceBody({ piece, glyphs }: { piece: Piece; glyphs: GlyphOffsets }) {
   )
 }
 
+/** 护盾：罩在棋子上的透明半球 */
+function ShieldBubble() {
+  return (
+    <g className="shield-bubble">
+      <g className="shield-breathe">
+        <circle r="37" fill="url(#shieldGlow)" />
+        <circle r="32" fill="url(#shieldBubble)" />
+        <circle className="shield-rim" r="31.5" />
+        <circle className="shield-sweep" r="30" />
+        {/* 左上角的反光：一道月牙和一个亮点 */}
+        <path className="shield-crescent" d="M -25.4 -9.2 A 27 27 0 0 1 -7 -26.1" />
+        <ellipse className="shield-spark" cx="-13" cy="-15" rx="5" ry="2.6" transform="rotate(-45 -13 -15)" />
+      </g>
+    </g>
+  )
+}
+
 function PieceView({
   piece,
   cx,
@@ -373,8 +402,8 @@ function PieceView({
       <g className="piece-lift">
         {danger && <circle className="danger-ring" r="32" />}
         {guarded && <circle className="guard-ring" r="33" />}
-        {piece.shield > 0 && <circle className="shield-ring" r="31" />}
         <PieceBody piece={piece} glyphs={glyphs} />
+        {piece.shield > 0 && <ShieldBubble />}
         {piece.shield > 1 && (
           <g transform="translate(20 -20)">
             <circle r="9" className="shield-badge" />

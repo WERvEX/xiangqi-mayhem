@@ -49,6 +49,8 @@ src/
   ui/                # React 界面
     GameView.tsx     # 通用对局界面（同屏、联机共用）
     Board.tsx        # SVG 棋盘、棋子与特效
+    sound.ts         # 音效：Web Audio 现场合成，开关存在 localStorage
+    soundEvents.ts   # 局面变化 → 要播放的音效（纯函数，有单测）
     HotseatGame.tsx  # 同屏对战
     AiGame.tsx       # 挑战 AI（设置与规则 AI 对局）
     LlmGame.tsx      # 玩家对战大模型
@@ -149,6 +151,15 @@ scripts/llm-proxy*.ts # 大模型请求转发（本地工具 + 开发服务器�
 2. 用 `npm run sim -- --compare --new <新> --old <旧> --time 300` 在相同思考时间下对战，双方轮流执红
 3. 可以再用 `--depth 3` 固定深度对比，单独衡量评估本身（不计速度）
 4. 新版本不弱于旧版本、且风格符合预期后，再改为默认
+
+## 音效
+
+`src/ui/sound.ts` 用 Web Audio 现场合成全部音效（木头落子声 = 带通噪声 + 短促低频正弦，护盾 = 几个高频泛音衰减，等等），不需要音频文件。
+
+- 播放什么由 `soundsFor(上一个局面, 新局面, 自己执哪方)` 决定：根据新增的日志特效（`LogEntry.fx`）、走子、锦囊阶段变化、胜负和叫杀判断。只在局面往前走一两步时出声，悔棋、回放拖动不出声
+- `GameView` 在局面变化时调用它，所以人机、同屏、联机、观战、回放都有音效
+- 浏览器要求用户操作过页面才能出声：第一次点击或按键时才创建 `AudioContext`
+- 新增特效类型（`FxKind`）时，在 `soundEvents.ts` 的 `FX_SOUNDS` 和 `sound.ts` 的 `SOUNDS` 里各加一项
 
 ## 回放
 

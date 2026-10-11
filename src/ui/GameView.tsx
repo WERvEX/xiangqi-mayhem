@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   AUGMENTS,
   kingThreat,
@@ -24,6 +24,8 @@ import { DIFFICULTIES, type Difficulty } from '../ai/bot'
 import { Board, type FxItem } from './Board'
 import { AugmentCard, AugmentChip, AugmentGlyph, ConfirmModal, Modal, Rules } from './common'
 import { useHint } from './Hint'
+import { playSound, playSounds, setSoundEnabled, useSoundEnabled } from './sound'
+import { soundsFor } from './soundEvents'
 
 const SIDES: Side[] = ['red', 'black']
 
@@ -116,6 +118,15 @@ export function GameView({
     setGhosts(forward ? state.pieces.filter((p) => !p.alive && wasAlive.has(p.id)).map((p) => wasAlive.get(p.id)!) : [])
   }
 
+  // 音效：局面往前走时按发生的事播放
+  const soundOn = useSoundEnabled()
+  const soundPrev = useRef(state)
+  useEffect(() => {
+    const prev = soundPrev.current
+    soundPrev.current = state
+    if (prev !== state) playSounds(soundsFor(prev, state, spectator ? null : mySide))
+  }, [state, mySide, spectator])
+
   const canAct = (side: Side) => mySide === null || mySide === side
   const myTurn = !spectator && state.phase === 'play' && canAct(state.turn)
 
@@ -153,6 +164,7 @@ export function GameView({
     const p = pieceAt(state, pos.x, pos.y)
     if (p && p.side === state.turn && p.id !== selectedId && moves.some((m) => m.pieceId === p.id)) {
       setSelectedId(p.id)
+      playSound('select')
     } else setSelectedId(null)
   }
 
@@ -273,6 +285,14 @@ export function GameView({
         </button>
         <button type="button" onClick={() => setShowRules(true)}>
           规则
+        </button>
+        <button
+          type="button"
+          onClick={() => setSoundEnabled(!soundOn)}
+          title={soundOn ? '关闭音效' : '打开音效'}
+          aria-label={soundOn ? '关闭音效' : '打开音效'}
+        >
+          {soundOn ? '🔊' : '🔇'}
         </button>
         {extraControls}
         {hints && !spectator && state.phase === 'play' && (
