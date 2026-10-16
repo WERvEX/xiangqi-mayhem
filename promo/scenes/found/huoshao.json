@@ -1,0 +1,154 @@
+[
+ {
+  "scene": "huoshao",
+  "seed": "promo-huoshao-3",
+  "actions": [
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "huoshao"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "jieshi"
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rC1",
+   "to": {
+    "x": 1,
+    "y": 0
+   }
+  },
+  "round": 1,
+  "score": 3,
+  "note": "烧掉 3 个",
+  "augments": {
+   "red": [
+    "huoshao"
+   ],
+   "black": [
+    "jieshi"
+   ]
+  }
+ },
+ {
+  "scene": "huoshao",
+  "seed": "promo-huoshao-6",
+  "actions": [
+   {
+    "type": "reroll",
+    "side": "red"
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "huoshao"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "kongcheng"
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rC1",
+   "to": {
+    "x": 1,
+    "y": 0
+   }
+  },
+  "round": 1,
+  "score": 2,
+  "note": "烧掉 2 个",
+  "augments": {
+   "red": [
+    "huoshao"
+   ],
+   "black": [
+    "kongcheng"
+   ]
+  }
+ },
+ {
+  "scene": "huoshao",
+  "seed": "promo-huoshao-11",
+  "actions": [
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "huoshao"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "yixing"
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rC1",
+   "to": {
+    "x": 1,
+    "y": 0
+   }
+  },
+  "round": 1,
+  "score": 2,
+  "note": "烧掉 2 个",
+  "augments": {
+   "red": [
+    "huoshao"
+   ],
+   "black": [
+    "yixing"
+   ]
+  }
+ },
+ {
+  "scene": "huoshao",
+  "seed": "promo-huoshao-13",
+  "actions": [
+   {
+    "type": "reroll",
+    "side": "red"
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "huoshao"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "lianzhu"
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rC1",
+   "to": {
+    "x": 1,
+    "y": 0
+   }
+  },
+  "round": 1,
+  "score": 2,
+  "note": "烧掉 2 个",
+  "augments": {
+   "red": [
+    "huoshao"
+   ],
+   "black": [
+    "lianzhu"
+   ]
+  }
+ }
+]

@@ -1,0 +1,12 @@
+{
+  "name": "xiangqi-mayhem-promo",
+  "private": true,
+  "type": "module",
+  "description": "宣传视频的录屏与合成脚本（不参与游戏构建）",
+  "devDependencies": {
+    "playwright-core": "^1.64.1"
+  },
+  "scripts": {
+    "find": "../node_modules/.bin/esbuild scenes/find.ts --bundle --platform=node --format=esm --outfile=out/find.mjs --log-level=warning && node out/find.mjs"
+  }
+}

@@ -1,0 +1,1232 @@
+[
+ {
+  "scene": "zongheng",
+  "seed": "promo-zongheng-1",
+  "actions": [
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "xianfeng"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "yulin"
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 4,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR2",
+    "to": {
+     "x": 8,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 2,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC1",
+    "to": {
+     "x": 4,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 2,
+     "y": 3
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN2",
+    "to": {
+     "x": 6,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN1",
+    "to": {
+     "x": 2,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 0,
+     "y": 1
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 1,
+     "y": 9
+    }
+   },
+   {
+    "type": "reroll",
+    "side": "red"
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "tiejia"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "jinzhong"
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 0,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 1,
+     "y": 1
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 0,
+     "y": 0
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 6,
+     "y": 3
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC1",
+    "to": {
+     "x": 2,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 0,
+     "y": 3
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 2,
+     "y": 1
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 0,
+     "y": 1
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC1",
+    "to": {
+     "x": 2,
+     "y": 7
+    }
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "longma"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "kongcheng"
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 0,
+     "y": 0
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 0,
+     "y": 0
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR2",
+    "to": {
+     "x": 8,
+     "y": 8
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 2,
+     "y": 1
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR2",
+    "to": {
+     "x": 2,
+     "y": 8
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC1",
+    "to": {
+     "x": 2,
+     "y": 9
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR2",
+    "to": {
+     "x": 2,
+     "y": 9
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN2",
+    "to": {
+     "x": 7,
+     "y": 4
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN2",
+    "to": {
+     "x": 6,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC2",
+    "to": {
+     "x": 6,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN2",
+    "to": {
+     "x": 4,
+     "y": 8
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC2",
+    "to": {
+     "x": 2,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rP2",
+    "to": {
+     "x": 3,
+     "y": 6
+    }
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "zongheng"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "mantian"
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 4,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 7,
+     "y": 1
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC2",
+    "to": {
+     "x": 0,
+     "y": 2
+    }
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rR1",
+   "to": {
+    "x": 8,
+    "y": 2
+   }
+  },
+  "round": 18,
+  "score": 5,
+  "note": "斜走吃R",
+  "augments": {
+   "red": [
+    "xianfeng",
+    "tiejia",
+    "longma",
+    "zongheng"
+   ],
+   "black": [
+    "yulin",
+    "jinzhong",
+    "kongcheng",
+    "mantian"
+   ]
+  }
+ },
+ {
+  "scene": "zongheng",
+  "seed": "promo-zongheng-10",
+  "actions": [
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "yulin"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "tianma"
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 7,
+     "y": 0
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 0,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN1",
+    "to": {
+     "x": 0,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 0,
+     "y": 1
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 0,
+     "y": 8
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN2",
+    "to": {
+     "x": 5,
+     "y": 1
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 8,
+     "y": 8
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR2",
+    "to": {
+     "x": 8,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN2",
+    "to": {
+     "x": 6,
+     "y": 7
+    }
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "liangcao"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "liangcao"
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC2",
+    "to": {
+     "x": 7,
+     "y": 4
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 4,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC1",
+    "to": {
+     "x": 1,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 6,
+     "y": 8
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 1,
+     "y": 4
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR2",
+    "to": {
+     "x": 8,
+     "y": 8
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC2",
+    "to": {
+     "x": 8,
+     "y": 4
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR2",
+    "to": {
+     "x": 7,
+     "y": 8
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC1",
+    "to": {
+     "x": 6,
+     "y": 7
+    }
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "zongheng"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "mantian"
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rR2",
+   "to": {
+    "x": 6,
+    "y": 7
+   }
+  },
+  "round": 10,
+  "score": 4,
+  "note": "斜走吃C",
+  "augments": {
+   "red": [
+    "yulin",
+    "liangcao",
+    "zongheng"
+   ],
+   "black": [
+    "tianma",
+    "liangcao",
+    "mantian"
+   ]
+  }
+ },
+ {
+  "scene": "zongheng",
+  "seed": "promo-zongheng-0",
+  "actions": [
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "zhongzhi"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "feixiang"
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 4,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 2,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 6,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 0,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 6,
+     "y": 3
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bP2",
+    "to": {
+     "x": 2,
+     "y": 4
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR2",
+    "to": {
+     "x": 8,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR2",
+    "to": {
+     "x": 8,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN2",
+    "to": {
+     "x": 6,
+     "y": 7
+    }
+   },
+   {
+    "type": "reroll",
+    "side": "red"
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "jinzhong"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "yujia"
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC1",
+    "to": {
+     "x": 1,
+     "y": 0
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 0,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bP2",
+    "to": {
+     "x": 2,
+     "y": 5
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rP2",
+    "to": {
+     "x": 2,
+     "y": 5
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 1,
+     "y": 4
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rP2",
+    "to": {
+     "x": 2,
+     "y": 4
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 6,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 7,
+     "y": 3
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 2,
+     "y": 2
+    }
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "huangjinjia"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "huangpao"
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 0,
+     "y": 3
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 6,
+     "y": 6
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 4,
+     "y": 3
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 4,
+     "y": 3
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN1",
+    "to": {
+     "x": 2,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 2,
+     "y": 4
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rP2",
+    "to": {
+     "x": 2,
+     "y": 3
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 3,
+     "y": 1
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rP2",
+    "to": {
+     "x": 1,
+     "y": 3
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 6,
+     "y": 6
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN2",
+    "to": {
+     "x": 4,
+     "y": 8
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 8,
+     "y": 6
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN1",
+    "to": {
+     "x": 3,
+     "y": 5
+    }
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "zongheng"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "mantian"
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 4,
+     "y": 6
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 2,
+     "y": 5
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 0,
+     "y": 6
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 2,
+     "y": 1
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 4,
+     "y": 6
+    }
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rR1",
+   "to": {
+    "x": 1,
+    "y": 0
+   }
+  },
+  "round": 19,
+  "score": 4,
+  "note": "斜走吃C",
+  "augments": {
+   "red": [
+    "zhongzhi",
+    "jinzhong",
+    "huangjinjia",
+    "zongheng"
+   ],
+   "black": [
+    "feixiang",
+    "yujia",
+    "huangpao",
+    "mantian"
+   ]
+  }
+ },
+ {
+  "scene": "zongheng",
+  "seed": "promo-zongheng-9",
+  "actions": [
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "xiexing"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "feixiang"
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 2,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 0,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 6,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC1",
+    "to": {
+     "x": 1,
+     "y": 6
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 0,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC2",
+    "to": {
+     "x": 1,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 0,
+     "y": 9
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC1",
+    "to": {
+     "x": 4,
+     "y": 6
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 6,
+     "y": 3
+    }
+   },
+   {
+    "type": "reroll",
+    "side": "red"
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "huima"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "fanjian"
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR2",
+    "to": {
+     "x": 8,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 7,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "rP4",
+    "to": {
+     "x": 5,
+     "y": 6
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 0,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR2",
+    "to": {
+     "x": 6,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rR1",
+    "to": {
+     "x": 6,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bN1",
+    "to": {
+     "x": 2,
+     "y": 2
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN1",
+    "to": {
+     "x": 2,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bP2",
+    "to": {
+     "x": 2,
+     "y": 4
+    }
+   },
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "zongheng"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "huoshao"
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rR1",
+   "to": {
+    "x": 5,
+    "y": 6
+   }
+  },
+  "round": 10,
+  "score": 1,
+  "note": "斜走吃P",
+  "augments": {
+   "red": [
+    "xiexing",
+    "huima",
+    "zongheng"
+   ],
+   "black": [
+    "feixiang",
+    "fanjian",
+    "huoshao"
+   ]
+  }
+ }
+]

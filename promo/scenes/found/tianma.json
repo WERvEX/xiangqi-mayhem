@@ -1,0 +1,290 @@
+[
+ {
+  "scene": "tianma",
+  "seed": "promo-tianma-5",
+  "actions": [
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "tianma"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "xiexing"
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 4,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC2",
+    "to": {
+     "x": 7,
+     "y": 9
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rN2",
+    "to": {
+     "x": 5,
+     "y": 8
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR1",
+    "to": {
+     "x": 0,
+     "y": 2
+    }
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rN1",
+   "to": {
+    "x": 3,
+    "y": 8
+   }
+  },
+  "round": 3,
+  "score": 1,
+  "note": "马腿被 B 堵住",
+  "augments": {
+   "red": [
+    "tianma"
+   ],
+   "black": [
+    "xiexing"
+   ]
+  }
+ },
+ {
+  "scene": "tianma",
+  "seed": "promo-tianma-6",
+  "actions": [
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "tianma"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "huitou"
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 4,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC2",
+    "to": {
+     "x": 7,
+     "y": 9
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 6,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR2",
+    "to": {
+     "x": 8,
+     "y": 2
+    }
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rN1",
+   "to": {
+    "x": 3,
+    "y": 8
+   }
+  },
+  "round": 3,
+  "score": 1,
+  "note": "马腿被 B 堵住",
+  "augments": {
+   "red": [
+    "tianma"
+   ],
+   "black": [
+    "huitou"
+   ]
+  }
+ },
+ {
+  "scene": "tianma",
+  "seed": "promo-tianma-7",
+  "actions": [
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "tianma"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "huitou"
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 4,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC2",
+    "to": {
+     "x": 7,
+     "y": 9
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 6,
+     "y": 7
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bR2",
+    "to": {
+     "x": 8,
+     "y": 2
+    }
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rN1",
+   "to": {
+    "x": 3,
+    "y": 8
+   }
+  },
+  "round": 3,
+  "score": 1,
+  "note": "马腿被 B 堵住",
+  "augments": {
+   "red": [
+    "tianma"
+   ],
+   "black": [
+    "huitou"
+   ]
+  }
+ },
+ {
+  "scene": "tianma",
+  "seed": "promo-tianma-8",
+  "actions": [
+   {
+    "type": "pick",
+    "side": "red",
+    "augmentId": "tianma"
+   },
+   {
+    "type": "pick",
+    "side": "black",
+    "augmentId": "tianma"
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC1",
+    "to": {
+     "x": 1,
+     "y": 0
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC1",
+    "to": {
+     "x": 1,
+     "y": 9
+    }
+   },
+   {
+    "type": "move",
+    "side": "red",
+    "pieceId": "rC2",
+    "to": {
+     "x": 7,
+     "y": 0
+    }
+   },
+   {
+    "type": "move",
+    "side": "black",
+    "pieceId": "bC2",
+    "to": {
+     "x": 7,
+     "y": 9
+    }
+   }
+  ],
+  "key": {
+   "type": "move",
+   "side": "red",
+   "pieceId": "rN1",
+   "to": {
+    "x": 3,
+    "y": 8
+   }
+  },
+  "round": 3,
+  "score": 1,
+  "note": "马腿被 B 堵住",
+  "augments": {
+   "red": [
+    "tianma"
+   ],
+   "black": [
+    "tianma"
+   ]
+  }
+ }
+]
