@@ -4,6 +4,8 @@
 
 成片：`out/final/象棋大乱斗-横屏.mp4`（2:20，1920×1080）、`out/final/象棋大乱斗-竖屏.mp4`（0:40，1080×1920）
 
+封面：`out/final/封面-横屏.png`（1920×1080）、`out/final/封面-竖屏.png`（1080×1920，标题和棋盘在中间 3:4 区域内，抖音主页裁切后也完整）
+
 ## 目录
 
 ```
@@ -19,7 +21,8 @@ promo/
 │  ├─ llm-shots.mjs     大模型镜头（挑战大模型、模型斗蛐蛐）→ out/clips/
 │  ├─ llm-setup.mjs     打开录屏专用浏览器，由本人填写大模型 API 密钥
 │  ├─ proxy.ts          录屏用的大模型转发（连接超时自动重试）
-│  └─ readme-shots.mjs  仓库 README 里的截图
+│  ├─ readme-shots.mjs  仓库 README 里的截图
+│  └─ covers.mjs        视频封面（用游戏自己的样式排版）
 ├─ scenes/
 │  ├─ find.ts           规则 AI 自对弈，找锦囊特效的演示局面
 │  └─ found/            找到的局面（种子 + 操作序列）
@@ -27,7 +30,7 @@ promo/
    ├─ clips/            录好的原始素材（.marks.json 是镜头内的时间标记）
    ├─ tts/              旁白音频
    ├─ llm-profile/      录屏专用浏览器配置，存着大模型 API 密钥
-   └─ final/            成片
+   └─ final/            成片和封面
 ```
 
 ## 用法
@@ -39,6 +42,7 @@ promo/
 node rec/shots.mjs L-huoshao P-intro     # 重录指定镜头，不带参数录全部
 npm run find -- huoshao                  # 重新找某个锦囊的演示局面
 .venv/Scripts/python compose.py all      # 合成两版（landscape / portrait / all）
+node rec/covers.mjs                      # 重新生成封面
 ```
 
 大模型镜头：先运行 `node rec/llm-setup.mjs` 在弹出的窗口里配置模型（密钥由本人粘贴），再启动 `.claude/launch.json` 里的 `promo-proxy`（8788 端口），然后 `node rec/llm-shots.mjs L-llm L-eve P-llm P-eve`。斗蛐蛐双方用哪个配置由环境变量 `RED` / `BLACK`（配置序号）指定。
