@@ -19,6 +19,29 @@
 - 🎬 **回放分享**：一条链接就能分享整局棋
 - 📱 电脑、手机都能玩，不用安装
 
+## 截图
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/screenshots/draft.webp" alt="锦囊三选一"></td>
+    <td width="33%"><img src="docs/screenshots/huoshao.webp" alt="火烧连营：炮吃子后烧掉周围的敌子"></td>
+    <td width="33%"><img src="docs/screenshots/win.webp" alt="吃将获胜"></td>
+  </tr>
+  <tr>
+    <td align="center">锦囊三选一</td>
+    <td align="center">火烧连营：炮吃子后烧掉周围的敌子</td>
+    <td align="center">吃掉对方的将帅就赢</td>
+  </tr>
+</table>
+
+**挑战大模型**：你每走一步，大模型先点评再落子，还可以偷看它的思考
+
+![挑战大模型](docs/screenshots/llm.webp)
+
+**模型斗蛐蛐**：两个大模型对战，边下边发言，你来观战
+
+![模型斗蛐蛐](docs/screenshots/eve.webp)
+
 ## 使用
 
 ### 直接游玩
