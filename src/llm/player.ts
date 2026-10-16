@@ -159,7 +159,7 @@ export async function comment(
 ): Promise<{ text: string; usage: Usage }> {
   const res = await complete(profile, {
     system: systemPrompt(),
-    user: commentPrompt(input),
+    user: commentPrompt({ ...input, model: profile.model }),
     maxTokens: COMMENT_MAX_TOKENS,
     signal,
   })

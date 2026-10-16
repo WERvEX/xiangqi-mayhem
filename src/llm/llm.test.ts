@@ -145,6 +145,13 @@ describe('模型对战的隔离', () => {
     expect(intro).toContain('黑方')
     expect(intro).not.toContain(renderPosition(s, 'black'))
   })
+
+  it('开场告诉模型实际调用的模型 ID，之后的发言不带', () => {
+    const s = started()
+    const input = { state: s, side: 'black' as const, opponentActions: [], persona: 'x', model: 'glm-5-3-flash' }
+    expect(commentPrompt({ ...input, moment: 'opening' })).toContain('glm-5-3-flash')
+    expect(commentPrompt({ ...input, moment: 'reply' })).not.toContain('glm-5-3-flash')
+  })
 })
 
 describe('辅助标注', () => {

@@ -439,6 +439,8 @@ export interface CommentPromptInput {
   persona: string
   /** 对喷模式（模型对战时可选）：对方上一句说了什么。走棋请求里永远没有这个 */
   opponentSpeech?: string
+  /** 实际调用的模型 ID：开场自我介绍时告诉模型，免得它把自己认成别家的模型 */
+  model?: string
 }
 
 export function commentPrompt({
@@ -448,6 +450,7 @@ export function commentPrompt({
   moment,
   persona,
   opponentSpeech,
+  model,
 }: CommentPromptInput): string {
   const opening = moment === 'opening'
   // 开场是自我介绍，用不着棋盘
@@ -465,6 +468,8 @@ export function commentPrompt({
   }
   if (opponentSpeech) parts.push(`对方刚才对你说：「${opponentSpeech}」`, '')
   parts.push(`你的说话风格：${persona}`, '')
+  // 有的模型会把自己认成别家的模型（实测 GLM 自称 Claude），开场时告诉它实际调用的是哪个
+  if (opening && model?.trim()) parts.push(`这局调用的模型是「${model.trim()}」。介绍自己时以它为准，不要说成别的模型或别的公司。`, '')
   const task: Record<CommentMoment, string> = {
     opening:
       '向你的对手做个简短的自我介绍：你是谁（你是哪个大模型、哪家公司做的，如果你清楚的话），再用一句话亮出你这局的态度。不用分析局面。',
