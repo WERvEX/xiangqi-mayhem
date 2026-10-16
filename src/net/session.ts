@@ -23,6 +23,10 @@ export interface SessionSnapshot {
   undoResult: { result: 'accepted' | 'declined'; requester: Side; at: number } | null
   /** 客人：已经重连了几次 */
   reconnectAttempt: number
+  /** 对方是主动离开的（而不是断线） */
+  opponentLeft: boolean
+  /** 临时提示，如"对方换了个页面重新加入" */
+  notice: { text: string; at: number } | null
 }
 
 /** 房主刷新页面后恢复房间需要的数据（由界面层存进 sessionStorage） */
@@ -35,6 +39,12 @@ export interface HostSave {
   token: string | null
   rematchVotes: Side[]
 }
+
+/** 房间里已经有一位在线的客人。原来的客人换了页面时，要等房主那边发现旧连接断开（心跳超时约 13 秒） */
+export const ROOM_TAKEN = '房间里已经有对手在线了。如果你就是刚才的对手、换了页面或设备，请等十几秒再重试'
+
+/** 发出离开消息后稍等再断开，让消息发出去 */
+const BYE_FLUSH_MS = 300
 
 /** 客人断线后持续重连这么久，之后改为手动重试 */
 const RECONNECT_WINDOW = 120_000
@@ -76,6 +86,8 @@ export class OnlineSession {
       undoRequester: null,
       undoResult: null,
       reconnectAttempt: 0,
+      opponentLeft: false,
+      notice: null,
     }
   }
 
@@ -173,16 +185,31 @@ export class OnlineSession {
     conn.onMessage((msg) => {
       if (msg.t === 'hello') {
         if (msg.version !== PROTOCOL_VERSION) return this.reject(conn, '双方游戏版本不一致，请都刷新页面后重试')
-        if (this.token && msg.token !== this.token) return this.reject(conn, '房间已满')
+        // 换了身份（换了页面、浏览器或设备）：原来的客人还在线就拒绝；已经离开或断线，就让新来的接着下这局
+        const newcomer = !!this.token && msg.token !== this.token
+        if (newcomer && this.conn && this.conn !== conn) return this.reject(conn, ROOM_TAKEN)
         this.token = msg.token
         if (this.conn && this.conn !== conn) this.conn.close()
         this.conn = conn
         this.sendSync()
-        this.patch({ status: 'playing', opponentOnline: true, route: null })
+        this.patch({
+          status: 'playing',
+          opponentOnline: true,
+          opponentLeft: false,
+          route: null,
+          ...(newcomer && this.actions.length ? { notice: { text: '对方换了个页面，重新加入了对局', at: Date.now() } } : {}),
+        })
         this.detectRoute(conn)
         return
       }
       if (conn !== this.conn) return
+      if (msg.t === 'bye') {
+        // 客人主动离开：位置空出来，之后可以从任何页面重新加入
+        this.conn = null
+        conn.close()
+        this.patch({ opponentOnline: false, opponentLeft: true, undoRequester: null })
+        return
+      }
       const guestSide = other(this.snapshot.mySide!)
       if (msg.t === 'submit') this.hostApply(msg.action, guestSide)
       else if (msg.t === 'resync') this.sendSync()
@@ -315,7 +342,9 @@ export class OnlineSession {
       if (conn !== this.conn) return
       this.conn = null
       this.patch({ opponentOnline: false })
-      if (!this.closed && this.snapshot.status !== 'error') this.scheduleReconnect('与对方的连接已断开')
+      if (!this.closed && this.snapshot.status !== 'error' && !this.snapshot.opponentLeft) {
+        this.scheduleReconnect('与对方的连接已断开')
+      }
     })
     conn.send({ t: 'hello', version: PROTOCOL_VERSION, token: this.token! })
   }
@@ -393,6 +422,10 @@ export class OnlineSession {
       case 'reject':
         this.fail(msg.reason)
         break
+      case 'bye':
+        // 房主关闭了房间，不用再重连
+        this.patch({ opponentOnline: false, opponentLeft: true, reconnecting: false, error: '房主已关闭房间' })
+        break
     }
   }
 
@@ -432,13 +465,30 @@ export class OnlineSession {
     else this.conn?.send({ t: 'rematch' })
   }
 
+  /**
+   * 客人的页面要关了（返回手势、关掉标签页）：尽量告诉房主，让位置马上空出来，
+   * 换个页面重新加入时不用等房主那边心跳超时。房主刷新页面要恢复房间，所以房主不发
+   */
+  pageClosing() {
+    if (this.snapshot.role === 'guest' && !this.closed) this.conn?.send({ t: 'bye' })
+  }
+
+  /** 主动离开：先告诉对方（对方就知道不是断线），再断开 */
   leave() {
+    if (this.closed) return
     this.closed = true
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     const conn = this.conn
+    const host = this.host
     this.conn = null
-    conn?.close()
-    this.host?.destroy()
+    this.host = null
     this.listeners.clear()
+    if (conn) {
+      conn.send({ t: 'bye' })
+      setTimeout(() => {
+        conn.close()
+        host?.destroy()
+      }, BYE_FLUSH_MS)
+    } else host?.destroy()
   }
 }

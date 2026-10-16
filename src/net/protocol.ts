@@ -2,9 +2,9 @@ import { RULES_VERSION, type Action, type Side } from '../engine'
 
 /**
  * 双方版本不一致会拒绝连接：规则不同的两端各自计算会得到不同的局面，消息格式不同也无法通信。
- * 规则版本 × 100 + 协议修订号（1：悔棋）
+ * 规则版本 × 100 + 协议修订号（1：悔棋；2：主动离开）
  */
-export const PROTOCOL_VERSION = RULES_VERSION * 100 + 1
+export const PROTOCOL_VERSION = RULES_VERSION * 100 + 2
 
 export type NetMessage =
   /** 客人 → 房主：加入或重连 */
@@ -29,5 +29,7 @@ export type NetMessage =
   | { t: 'undo-status'; requester: Side | null; result?: 'accepted' | 'declined' }
   /** 房主 → 客人：拒绝加入 */
   | { t: 'reject'; reason: string }
+  /** 双向：主动离开房间（客人点了离开、房主关闭房间），和断线区分开 */
+  | { t: 'bye' }
   /** 心跳，由传输层处理 */
   | { t: 'ping' }

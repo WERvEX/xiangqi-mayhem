@@ -208,6 +208,13 @@ function OnlineRoom({ session, onLeave }: { session: OnlineSession; onLeave: () 
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [session, snap.role])
 
+  // 客人关掉页面（包括手机上的返回手势）时告诉房主，换个页面能马上重新加入
+  useEffect(() => {
+    const onHide = () => session.pageClosing()
+    window.addEventListener('pagehide', onHide)
+    return () => window.removeEventListener('pagehide', onHide)
+  }, [session])
+
   // 开发模式下暴露给控制台，便于调试和测试（生产构建会移除）
   useEffect(() => {
     if (import.meta.env.DEV) Object.assign(window, { __xq: { state: snap.state, dispatch: (a: Action) => session.submit(a), session } })
@@ -324,6 +331,17 @@ function OnlineRoom({ session, onLeave }: { session: OnlineSession; onLeave: () 
             · {snap.route === 'relay' ? '经中转' : '直连'}
           </span>
         )}
+      </div>
+    )
+  } else if (snap.role === 'host' && snap.opponentLeft) {
+    banner = (
+      <div className="conn-banner warn">
+        <span>
+          对方离开了房间。把房间号 {snap.roomCode} 或邀请链接发给对方，重新加入就能接着下
+        </span>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(inviteLink(snap.roomCode!))}>
+          复制邀请链接
+        </button>
       </div>
     )
   } else if (snap.role === 'host') {

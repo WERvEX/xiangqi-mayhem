@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { legalMoves, other, type Side } from '../engine'
 import { MemoryNetwork } from './memoryTransport'
-import { OnlineSession } from './session'
+import { OnlineSession, ROOM_TAKEN } from './session'
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 
@@ -87,13 +87,54 @@ describe('联机会话', () => {
     expect(snap(guest).state).toEqual(snap(host).state)
   })
 
-  it('房间已满时拒绝第三人', async () => {
+  it('原来的客人还在线时，拒绝第三人', async () => {
     const { net, code } = await setup()
     const intruder = OnlineSession.join(net.transport, code, 'other-token')
     await flush()
     await flush()
     expect(snap(intruder).status).toBe('error')
-    expect(snap(intruder).error).toBe('房间已满')
+    expect(snap(intruder).error).toBe(ROOM_TAKEN)
+  })
+
+  it('客人点了离开：房主知道是主动离开，客人换个页面（新身份）也能接着下这局', async () => {
+    const { net, host, guest, code } = await setup('red')
+    host.submit({ type: 'pick', side: 'red', augmentId: snap(host).state!.draft!.sides.red.options[0] })
+    await flush()
+    guest.leave()
+    await new Promise((r) => setTimeout(r, 400))
+    expect(snap(host).opponentOnline).toBe(false)
+    expect(snap(host).opponentLeft).toBe(true)
+
+    const again = OnlineSession.join(net.transport, code, 'new-page-token')
+    await flush()
+    await flush()
+    expect(snap(again).status).toBe('playing')
+    expect(snap(again).mySide).toBe('black')
+    expect(snap(again).state).toEqual(snap(host).state)
+    expect(snap(host).opponentLeft).toBe(false)
+    expect(snap(host).notice?.text).toContain('重新加入')
+  })
+
+  it('客人没打招呼就断了（关掉页面）：换个页面也能接着下', async () => {
+    const { net, host, code } = await setup('red')
+    host.submit({ type: 'pick', side: 'red', augmentId: snap(host).state!.draft!.sides.red.options[0] })
+    await flush()
+    net.links[0].drop()
+    await flush()
+    const again = OnlineSession.join(net.transport, code, 'new-page-token')
+    await flush()
+    await flush()
+    expect(snap(again).status).toBe('playing')
+    expect(snap(again).state).toEqual(snap(host).state)
+  })
+
+  it('房主关闭房间：客人马上知道，不再重连', async () => {
+    const { host, guest } = await setup('red')
+    host.leave()
+    await new Promise((r) => setTimeout(r, 400))
+    expect(snap(guest).opponentOnline).toBe(false)
+    expect(snap(guest).reconnecting).toBe(false)
+    expect(snap(guest).error).toBe('房主已关闭房间')
   })
 
   it('双方都同意才再来一局，并交换先后手', async () => {
@@ -162,7 +203,7 @@ describe('联机会话', () => {
   })
 
   it('房主刷新页面后恢复房间，客人自动重连回来', async () => {
-    const { net, host, guest } = await setup('red')
+    const { net, host, guest, code } = await setup('red')
     for (const s of [host, guest]) {
       const side = snap(s).mySide!
       s.submit({ type: 'pick', side, augmentId: snap(s).state!.draft!.sides[side].options[0] })
@@ -172,7 +213,7 @@ describe('联机会话', () => {
     await flush()
     const save = host.hostSave()!
     const before = snap(host).state
-    host.leave() // 相当于房主刷新页面：房间和连接都没了
+    net.crashHost(code) // 房主刷新页面：房间和连接都没了，但没有发“离开”
     await flush()
     expect(snap(guest).reconnecting).toBe(true)
 
